@@ -5,7 +5,7 @@ const CLOUDINARY_UPLOAD_PRESET = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET;
 export const uploadSessionRecording = async (videoBlob: Blob): Promise<string> => {
   try {
     console.log('Starting Cloudinary upload...');
-
+    
     const formData = new FormData();
     formData.append('file', videoBlob);
     formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
@@ -13,12 +13,12 @@ export const uploadSessionRecording = async (videoBlob: Blob): Promise<string> =
     formData.append('folder', 'session_recordings');
 
     console.log('Uploading to Cloudinary...');
-
+    
     const response = await fetch(CLOUDINARY_UPLOAD_URL, {
       method: 'POST',
       body: formData,
     });
-
+    
     if (!response.ok) {
       const errorData = await response.json();
       console.error('Cloudinary error details:', errorData);
