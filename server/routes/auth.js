@@ -12,18 +12,17 @@ router.post('/register', async (req, res) => {
     if (existingUser) {
       return res.status(400).json({ message: 'User already exists' });
     }
-
-    const user = new User({
-      firstName,
-      lastName,
-      email,
-      birthDate,
-      phoneNumber,
-      password,
-      role
-    });
-
-    await user.save();
+      const user = new User({
+        firstName,
+        lastName,
+        email,
+        birthDate,
+        phoneNumber,
+        password,
+        role
+      });
+  
+      await user.save();
 
     const token = jwt.sign(
       { userId: user._id, role: user.role },
