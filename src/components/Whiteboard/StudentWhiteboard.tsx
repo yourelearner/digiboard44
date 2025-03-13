@@ -117,6 +117,7 @@ const StudentWhiteboard: React.FC = () => {
       await recorderRef.current.startRecording();
       setIsRecording(true);
 
+      // Handle stream end (when user stops sharing)
       stream.getVideoTracks()[0].onended = () => {
         handleStopRecording();
       };

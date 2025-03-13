@@ -1,15 +1,16 @@
-const CLOUDINARY_CLOUD_NAME = 'dfs1yylvq';
+const CLOUDINARY_CLOUD_NAME = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME;
 const CLOUDINARY_UPLOAD_URL = `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/upload`;
-const CLOUDINARY_API_KEY = '659623716894337';
-const UPLOAD_PRESET = 'digiboard_preset';
+const CLOUDINARY_UPLOAD_PRESET = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET;
 
 export const uploadSessionRecording = async (videoBlob: Blob): Promise<string> => {
   try {
     console.log('Starting Cloudinary upload...');
+    console.log('Using cloud name:', CLOUDINARY_CLOUD_NAME);
+    console.log('Using upload preset:', CLOUDINARY_UPLOAD_PRESET);
+
     const formData = new FormData();
     formData.append('file', videoBlob);
-    formData.append('upload_preset', UPLOAD_PRESET);
-    formData.append('api_key', CLOUDINARY_API_KEY);
+    formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
     formData.append('resource_type', 'video');
     formData.append('folder', 'session_recordings');
 
