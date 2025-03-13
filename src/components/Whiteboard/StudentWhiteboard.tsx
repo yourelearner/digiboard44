@@ -1,5 +1,4 @@
 import React, { useRef, useState, useEffect } from 'react';
-import CanvasDraw from 'react-canvas-draw';
 import { Video, Square } from 'lucide-react';
 import { io } from 'socket.io-client';
 import { uploadSessionRecording } from '../../lib/cloudinary';
@@ -74,8 +73,8 @@ const StudentWhiteboard: React.FC = () => {
         <button
           onClick={isRecording ? handleStopRecording : handleStartRecording}
           className={`flex items-center gap-2 px-4 py-2 rounded-md ${
-            isRecording 
-              ? 'bg-red-500 hover:bg-red-600' 
+            isRecording
+              ? 'bg-red-500 hover:bg-red-600'
               : 'bg-green-500 hover:bg-green-600'
           } text-white`}
         >

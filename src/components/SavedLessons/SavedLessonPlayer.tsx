@@ -1,5 +1,4 @@
 import React, { useRef, useEffect, useState } from 'react';
-import CanvasDraw from 'react-canvas-draw';
 import { Play, Pause, RotateCcw } from 'lucide-react';
 import axios from 'axios';
 
