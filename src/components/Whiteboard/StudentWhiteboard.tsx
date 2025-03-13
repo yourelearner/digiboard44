@@ -19,6 +19,7 @@ const StudentWhiteboard: React.FC = () => {
   const [whiteboardHistory, setWhiteboardHistory] = useState<string[]>([]);
   const [isTeacherLive, setIsTeacherLive] = useState(false);
   const [currentTeacherId, setCurrentTeacherId] = useState<string | null>(null);
+  const [currentPaths, setCurrentPaths] = useState<string>('[]');
 
   const handleStopRecording = useCallback(async () => {
     if (!isRecording || !recordingStartTime || !currentTeacherId) return;
@@ -29,7 +30,8 @@ const StudentWhiteboard: React.FC = () => {
       const recordingData = {
         history: whiteboardHistory,
         startTime: recordingStartTime,
-        endTime: new Date()
+        endTime: new Date(),
+        currentPaths
       };
 
       const videoUrl = await uploadSessionRecording(JSON.stringify(recordingData));
@@ -52,11 +54,12 @@ const StudentWhiteboard: React.FC = () => {
       }
 
       alert('Recording saved successfully!');
+      setWhiteboardHistory([]);
     } catch (error) {
       console.error('Error saving recording:', error);
       alert('Failed to save recording. Please try again.');
     }
-  }, [isRecording, recordingStartTime, currentTeacherId, whiteboardHistory]);
+  }, [isRecording, recordingStartTime, currentTeacherId, whiteboardHistory, currentPaths]);
 
   useEffect(() => {
     const handleWhiteboardUpdate = async (data: WhiteboardUpdate) => {
@@ -65,10 +68,11 @@ const StudentWhiteboard: React.FC = () => {
         if (data.whiteboardData && data.whiteboardData !== '[]') {
           const paths = JSON.parse(data.whiteboardData);
           await canvasRef.current.loadPaths(paths);
-        }
-        // Always update history if we're recording, regardless of socket events
-        if (isRecording) {
-          setWhiteboardHistory(prev => [...prev, data.whiteboardData]);
+          setCurrentPaths(data.whiteboardData);
+
+          if (isRecording) {
+            setWhiteboardHistory(prev => [...prev, data.whiteboardData]);
+          }
         }
       }
     };
@@ -90,9 +94,8 @@ const StudentWhiteboard: React.FC = () => {
       }
     };
 
-    socket.on('connect', () => console.log('Student connected to server'));
+    socket.on('connect', () => {});
     socket.on('disconnect', () => {
-      console.log('Student disconnected from server');
       setIsTeacherLive(false);
       setCurrentTeacherId(null);
       if (isRecording) {
@@ -124,7 +127,7 @@ const StudentWhiteboard: React.FC = () => {
     }
     setIsRecording(true);
     setRecordingStartTime(new Date());
-    setWhiteboardHistory([]);
+    setWhiteboardHistory([currentPaths]);
   };
 
   if (!isTeacherLive) {
