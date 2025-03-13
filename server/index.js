@@ -18,6 +18,9 @@ const io = new Server(httpServer, {
   }
 });
 
+// Keep track of live teachers
+const liveTeachers = new Set();
+
 // Middleware
 app.use(cors({
   origin: process.env.CLIENT_URL
@@ -32,14 +35,24 @@ app.use('/api/sessions', sessionRoutes);
 io.on('connection', (socket) => {
   console.log('A user connected');
 
+  // Handle teacher status check
+  socket.on('checkTeacherStatus', () => {
+    // Send current live teachers to the requesting client
+    liveTeachers.forEach(teacherId => {
+      socket.emit('teacherOnline', { teacherId });
+    });
+  });
+
   socket.on('startLive', (teacherId) => {
     console.log('Teacher started live session:', teacherId);
+    liveTeachers.add(teacherId);
     socket.join(`teacher-${teacherId}`);
     io.emit('teacherOnline', { teacherId });
   });
 
   socket.on('stopLive', (teacherId) => {
     console.log('Teacher stopped live session:', teacherId);
+    liveTeachers.delete(teacherId);
     io.emit('teacherOffline', { teacherId });
     socket.leave(`teacher-${teacherId}`);
   });
@@ -47,6 +60,10 @@ io.on('connection', (socket) => {
   socket.on('joinTeacherRoom', (teacherId) => {
     console.log('Student joined teacher room:', teacherId);
     socket.join(`teacher-${teacherId}`);
+    // If teacher is live, immediately send the status
+    if (liveTeachers.has(teacherId)) {
+      socket.emit('teacherOnline', { teacherId });
+    }
   });
 
   socket.on('leaveTeacherRoom', (teacherId) => {
