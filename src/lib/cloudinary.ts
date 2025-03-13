@@ -53,7 +53,7 @@ const createVideoFromFrames = async (frames: string[]): Promise<Blob> => {
               ctx.beginPath();
               ctx.strokeStyle = path.strokeColor || 'black';
               ctx.lineWidth = path.strokeWidth || 4;
-
+              
               const points = path.paths[0];
               if (points.length > 0) {
                 ctx.moveTo(points[0].x, points[0].y);
@@ -83,20 +83,20 @@ const createVideoFromFrames = async (frames: string[]): Promise<Blob> => {
 export const uploadSessionRecording = async (data: string): Promise<string> => {
   try {
     const recordingData = JSON.parse(data);
-
+    
     if (!Array.isArray(recordingData.history) || recordingData.history.length === 0) {
       throw new Error('No recording data available');
     }
 
     // Ensure we have unique frames
     const uniqueFrames = Array.from(new Set(recordingData.history));
-
+    
     if (uniqueFrames.length < 2) {
       throw new Error('Not enough frames for video creation');
     }
 
     const videoBlob = await createVideoFromFrames(uniqueFrames);
-
+    
     if (videoBlob.size === 0) {
       throw new Error('Generated video is empty');
     }
@@ -110,7 +110,7 @@ export const uploadSessionRecording = async (data: string): Promise<string> => {
       method: 'POST',
       body: formData,
     });
-
+    
     if (!response.ok) {
       const errorData = await response.json();
       console.error('Cloudinary error details:', errorData);

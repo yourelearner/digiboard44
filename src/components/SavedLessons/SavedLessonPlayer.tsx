@@ -11,13 +11,16 @@ const SavedLessonPlayer: React.FC<SavedLessonPlayerProps> = ({ videoUrl }) => {
         <h2 className="text-2xl font-bold">Saved Lesson</h2>
       </div>
       <div className="border rounded-lg overflow-hidden bg-white">
-        <video
-          controls
-          className="w-full h-auto"
-          src={videoUrl}
-        >
-          Your browser does not support the video tag.
-        </video>
+        <div className="aspect-video w-full">
+          <video 
+            controls 
+            className="w-full h-full object-contain"
+            src={videoUrl}
+            playsInline
+          >
+            Your browser does not support the video tag.
+          </video>
+        </div>
       </div>
     </div>
   );

@@ -15,20 +15,31 @@ const TeacherWhiteboard: React.FC = () => {
   const canvasRef = useRef<SketchCanvas>(null);
   const [isLive, setIsLive] = useState(false);
   const [showModal, setShowModal] = useState(false);
+  const [canvasSize, setCanvasSize] = useState({ width: 800, height: 600 });
+
+  useEffect(() => {
+    const handleResize = () => {
+      const container = document.getElementById('whiteboard-container');
+      if (container) {
+        const width = container.clientWidth;
+        const height = Math.min(window.innerHeight - 200, width * 0.75); // 4:3 aspect ratio
+        setCanvasSize({ width, height });
+      }
+    };
+
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   useEffect(() => {
     const userId = localStorage.getItem('userId');
 
-    socket.on('connect', () => {
-      console.log('Teacher connected to server');
-    });
-
+    socket.on('connect', () => {});
     socket.on('disconnect', () => {
-      console.log('Teacher disconnected from server');
       setIsLive(false);
     });
 
-    // Clean up on component unmount
     return () => {
       socket.off('connect');
       socket.off('disconnect');
@@ -49,7 +60,6 @@ const TeacherWhiteboard: React.FC = () => {
       setShowModal(false);
       socket.emit('startLive', userId);
       
-      // Send initial canvas state
       const paths = await canvasRef.current.exportPaths();
       socket.emit('whiteboardUpdate', {
         teacherId: userId,
@@ -102,9 +112,9 @@ const TeacherWhiteboard: React.FC = () => {
   return (
     <>
       <div className="p-4">
-        <div className="mb-4 flex justify-between items-center">
+        <div className="mb-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <h2 className="text-2xl font-bold">Whiteboard</h2>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             {isLive && (
               <button
                 onClick={handleClearCanvas}
@@ -133,32 +143,33 @@ const TeacherWhiteboard: React.FC = () => {
             </button>
           </div>
         </div>
-        <div className="border rounded-lg overflow-hidden bg-white">
+        <div id="whiteboard-container" className="border rounded-lg overflow-hidden bg-white">
           <ReactSketchCanvas
             ref={canvasRef}
             strokeWidth={4}
             strokeColor="black"
-            width="800px"
-            height="600px"
+            width={`${canvasSize.width}px`}
+            height={`${canvasSize.height}px`}
             onStroke={handleStroke}
             onChange={handleStroke}
             canvasColor="white"
             exportWithBackgroundImage={false}
             withTimestamp={false}
             allowOnlyPointerType="all"
+            className="touch-none"
           />
         </div>
       </div>
 
       {/* Confirmation Modal */}
       {showModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
             <h3 className="text-xl font-bold mb-4">Start Live Session</h3>
             <p className="text-gray-600 mb-6">
               Are you sure you want to start a live whiteboard session? Students will be able to join and view your whiteboard.
             </p>
-            <div className="flex justify-end gap-3">
+            <div className="flex flex-col sm:flex-row justify-end gap-3">
               <button
                 onClick={() => setShowModal(false)}
                 className="px-4 py-2 rounded-md bg-gray-200 hover:bg-gray-300 text-gray-800"
