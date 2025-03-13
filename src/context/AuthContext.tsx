@@ -20,14 +20,35 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     error: null,
   });
 
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    const user = localStorage.getItem('user');
+    if (token && user) {
+      setState({
+        user: JSON.parse(user),
+        isAuthenticated: true,
+        loading: false,
+        error: null,
+      });
+    } else {
+      setState(prev => ({ ...prev, loading: false }));
+    }
+  }, []);
+
   const login = async (email: string, password: string) => {
     try {
       const response = await axios.post(`${API_URL}/api/auth/login`, {
         email,
         password,
       });
+      
+      const { token, user } = response.data;
+      localStorage.setItem('token', token);
+      localStorage.setItem('user', JSON.stringify(user));
+      localStorage.setItem('userId', user.id);
+
       setState({
-        user: response.data.user,
+        user,
         isAuthenticated: true,
         loading: false,
         error: null,
@@ -38,14 +59,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         error: 'Invalid credentials',
         loading: false,
       }));
+      throw error;
     }
   };
 
   const register = async (userData: User & { password: string }) => {
     try {
       const response = await axios.post(`${API_URL}/api/auth/register`, userData);
+      
+      const { token, user } = response.data;
+      localStorage.setItem('token', token);
+      localStorage.setItem('user', JSON.stringify(user));
+      localStorage.setItem('userId', user.id);
+
       setState({
-        user: response.data.user,
+        user,
         isAuthenticated: true,
         loading: false,
         error: null,
@@ -56,21 +84,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         error: 'Registration failed',
         loading: false,
       }));
+      throw error;
     }
   };
 
   const logout = () => {
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    localStorage.removeItem('userId');
     setState({
-        user: null,
-        isAuthenticated: false,
-        loading: false,
-        error: null,
+      user: null,
+      isAuthenticated: false,
+      loading: false,
+      error: null,
     });
   };
 
   return (
     <AuthContext.Provider value={{ ...state, login, register, logout }}>
-      {children}
+      {!state.loading && children}
     </AuthContext.Provider>
   );
 };

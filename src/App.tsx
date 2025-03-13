@@ -19,30 +19,27 @@ function App() {
           <Route path="/register" element={<RegisterForm />} />
           
           {/* Teacher Routes */}
-          <Route
-            path="/teacher/*"
-            element={
-              <PrivateRoute role="teacher">
-                <Routes>
-                  <Route path="dashboard" element={<TeacherDashboard />} />
-                </Routes>
-              </PrivateRoute>
-            }
-          />
+          <Route path="/teacher/*" element={
+            <PrivateRoute role="teacher">
+              <Routes>
+                <Route path="dashboard" element={<TeacherDashboard />} />
+              </Routes>
+            </PrivateRoute>
+          } />
 
           {/* Student Routes */}
-          <Route
-            path="/student/*"
-            element={
-              <PrivateRoute role="student">
-                <Routes>
-                  <Route path="dashboard" element={<StudentDashboard />} />
-                  <Route path="live-whiteboard" element={<LiveWhiteboard />} />
-                  <Route path="saved-lessons" element={<SavedLessons />} />
-                </Routes>
-              </PrivateRoute>
-            }
-          />
+          <Route path="/student/*" element={
+            <PrivateRoute role="student">
+              <Routes>
+                <Route path="dashboard" element={<StudentDashboard />} />
+                <Route path="live-whiteboard" element={<LiveWhiteboard />} />
+                <Route path="saved-lessons" element={<SavedLessons />} />
+              </Routes>
+            </PrivateRoute>
+          } />
+
+          {/* Catch all route */}
+          <Route path="*" element={<Navigate to="/login" replace />} />
         </Routes>
       </Router>
     </AuthProvider>

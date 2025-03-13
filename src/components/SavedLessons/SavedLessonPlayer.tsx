@@ -1,4 +1,5 @@
 import React, { useRef, useEffect, useState } from 'react';
+import { ReactSketchCanvas } from 'react-sketch-canvas';
 import { Play, Pause, RotateCcw } from 'lucide-react';
 import axios from 'axios';
 
@@ -7,7 +8,7 @@ interface SavedLessonPlayerProps {
 }
 
 const SavedLessonPlayer: React.FC<SavedLessonPlayerProps> = ({ videoUrl }) => {
-  const whiteboardRef = useRef<any>(null);
+  const canvasRef = useRef<any>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentFrame, setCurrentFrame] = useState(0);
   const [whiteboardHistory, setWhiteboardHistory] = useState<string[]>([]);
@@ -28,9 +29,12 @@ const SavedLessonPlayer: React.FC<SavedLessonPlayerProps> = ({ videoUrl }) => {
   useEffect(() => {
     let animationFrame: number;
 
-    const animate = () => {
+    const animate = async () => {
       if (isPlaying && currentFrame < whiteboardHistory.length) {
-        whiteboardRef.current?.loadSaveData(whiteboardHistory[currentFrame], false);
+        if (canvasRef.current) {
+          await canvasRef.current.clearCanvas();
+          await canvasRef.current.loadPaths(JSON.parse(whiteboardHistory[currentFrame]));
+        }
         setCurrentFrame(prev => prev + 1);
         animationFrame = requestAnimationFrame(animate);
       } else if (currentFrame >= whiteboardHistory.length) {
@@ -53,10 +57,12 @@ const SavedLessonPlayer: React.FC<SavedLessonPlayerProps> = ({ videoUrl }) => {
     setIsPlaying(!isPlaying);
   };
 
-  const handleReset = () => {
+  const handleReset = async () => {
     setCurrentFrame(0);
     setIsPlaying(false);
-    whiteboardRef.current?.clear();
+    if (canvasRef.current) {
+      await canvasRef.current.clearCanvas();
+    }
   };
 
   return (
@@ -86,13 +92,14 @@ const SavedLessonPlayer: React.FC<SavedLessonPlayerProps> = ({ videoUrl }) => {
           </button>
         </div>
       </div>
-      <div className="border rounded-lg overflow-hidden">
-        <CanvasDraw
-          ref={whiteboardRef}
-          disabled
-          canvasWidth={800}
-          canvasHeight={600}
-          className="bg-white"
+      <div className="border rounded-lg overflow-hidden bg-white">
+        <ReactSketchCanvas
+          ref={canvasRef}
+          strokeWidth={4}
+          strokeColor="black"
+          width="800px"
+          height="600px"
+          readOnly
         />
       </div>
     </div>

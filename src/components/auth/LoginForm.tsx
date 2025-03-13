@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 
 const LoginForm = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { login } = useAuth();
   const [formData, setFormData] = useState({
     email: '',
@@ -19,7 +20,9 @@ const LoginForm = () => {
     e.preventDefault();
     try {
       await login(formData.email, formData.password);
-      navigate('/dashboard');
+      const user = JSON.parse(localStorage.getItem('user') || '{}');
+      const from = location.state?.from?.pathname || `/${user.role}/dashboard`;
+      navigate(from, { replace: true });
     } catch (err) {
       setError('Invalid credentials');
     }
