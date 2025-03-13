@@ -11,20 +11,10 @@ dotenv.config();
 
 const app = express();
 const httpServer = createServer(app);
-
-// Allow both production and localhost origins
-const allowedOrigins = [
-  process.env.CLIENT_URL,
-  process.env.LOCAL_CLIENT_URL,
-  'http://localhost:5173', // Vite's default port
-  'http://localhost:3000'  // Alternative port
-];
-
 const io = new Server(httpServer, {
   cors: {
-    origin: allowedOrigins,
-    methods: ["GET", "POST"],
-    credentials: true
+    origin: process.env.CLIENT_URL,
+    methods: ["GET", "POST"]
   }
 });
 
@@ -33,8 +23,7 @@ const liveTeachers = new Map(); // teacherId -> Set of student sockets
 
 // Middleware
 app.use(cors({
-  origin: allowedOrigins,
-  credentials: true
+  origin: process.env.CLIENT_URL
 }));
 app.use(express.json());
 
