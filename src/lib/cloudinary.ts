@@ -7,7 +7,7 @@ export const uploadSessionRecording = async (videoBlob: Blob): Promise<string> =
     console.log('Starting Cloudinary upload...');
     console.log('Using cloud name:', CLOUDINARY_CLOUD_NAME);
     console.log('Using upload preset:', CLOUDINARY_UPLOAD_PRESET);
-    
+
     const formData = new FormData();
     formData.append('file', videoBlob);
     formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
@@ -15,12 +15,12 @@ export const uploadSessionRecording = async (videoBlob: Blob): Promise<string> =
     formData.append('folder', 'session_recordings');
 
     console.log('Uploading to Cloudinary...');
-    
+
     const response = await fetch(CLOUDINARY_UPLOAD_URL, {
       method: 'POST',
       body: formData,
     });
-    
+
     if (!response.ok) {
       const errorData = await response.json();
       console.error('Cloudinary error details:', errorData);

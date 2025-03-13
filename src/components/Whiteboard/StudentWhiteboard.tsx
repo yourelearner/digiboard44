@@ -44,6 +44,7 @@ const StudentWhiteboard: React.FC = () => {
     if (!recorderRef.current || !currentTeacherId) return;
 
     try {
+      console.log('Stopping recording...');
       await recorderRef.current.stopRecording();
       const blob = await recorderRef.current.getBlob();
 
@@ -76,8 +77,10 @@ const StudentWhiteboard: React.FC = () => {
         throw new Error('Failed to save session');
       }
 
-      const tracks = recorderRef.current.getState().stream.getTracks();
-      tracks.forEach(track => track.stop());
+      if (recorderRef.current) {
+        const tracks = recorderRef.current.getState().stream.getTracks();
+        tracks.forEach(track => track.stop());
+      }
       recorderRef.current = null;
       setIsRecording(false);
 
@@ -90,7 +93,10 @@ const StudentWhiteboard: React.FC = () => {
   }, [currentTeacherId]);
 
   const startRecording = useCallback(async () => {
+    if (isRecording || !isTeacherLive) return;
+
     try {
+      console.log('Starting recording...');
       const container = document.getElementById('student-whiteboard-container');
       if (!container) {
         throw new Error('Whiteboard container not found');
@@ -113,6 +119,7 @@ const StudentWhiteboard: React.FC = () => {
 
       await recorderRef.current.startRecording();
       setIsRecording(true);
+      console.log('Recording started successfully');
 
       // Handle stream end
       stream.getVideoTracks()[0].onended = () => {
@@ -122,7 +129,18 @@ const StudentWhiteboard: React.FC = () => {
       console.error('Error starting recording:', error);
       alert('Failed to start recording. Please try again.');
     }
-  }, [handleStopRecording]);
+  }, [handleStopRecording, isRecording, isTeacherLive]);
+
+  // Check for active teacher on mount
+  useEffect(() => {
+    const checkTeacherStatus = () => {
+      // Emit a status check event
+      socket.emit('checkTeacherStatus');
+    };
+
+    // Check status when component mounts
+    checkTeacherStatus();
+  }, []);
 
   // Handle window resize
   useEffect(() => {
@@ -154,13 +172,13 @@ const StudentWhiteboard: React.FC = () => {
 
     const handleTeacherOffline = () => {
       console.log('Teacher offline');
+      if (isRecording) {
+        handleStopRecording();
+      }
       setIsTeacherLive(false);
       setCurrentTeacherId(null);
       if (canvasRef.current) {
         canvasRef.current.clearCanvas();
-      }
-      if (isRecording) {
-        handleStopRecording();
       }
     };
 
