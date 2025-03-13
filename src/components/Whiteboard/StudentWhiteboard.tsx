@@ -21,12 +21,16 @@ const StudentWhiteboard: React.FC = () => {
   const [isTeacherLive, setIsTeacherLive] = useState(false);
   const [currentTeacherId, setCurrentTeacherId] = useState<string | null>(null);
   const [canvasSize, setCanvasSize] = useState({ width: 800, height: 600 });
+  const lastUpdateRef = useRef<string>('[]');
 
   const handleWhiteboardUpdate = useCallback(async (data: WhiteboardUpdate) => {
     console.log('Received whiteboard update:', data);
     if (!canvasRef.current) return;
 
     try {
+      // Store the latest update
+      lastUpdateRef.current = data.whiteboardData;
+
       await canvasRef.current.clearCanvas();
       if (data.whiteboardData && data.whiteboardData !== '[]') {
         const paths = JSON.parse(data.whiteboardData);
@@ -50,9 +54,8 @@ const StudentWhiteboard: React.FC = () => {
       const videoUrl = await uploadSessionRecording(videoBlob);
       console.log('Upload successful, video URL:', videoUrl);
 
-      const whiteboardData = canvasRef.current ?
-        JSON.stringify(await canvasRef.current.exportPaths()) :
-        '[]';
+      // Use the latest whiteboard data
+      const whiteboardData = lastUpdateRef.current;
 
       console.log('Saving session to backend...');
       const response = await fetch(`${import.meta.env.VITE_API_URL}/api/sessions`, {
@@ -116,6 +119,11 @@ const StudentWhiteboard: React.FC = () => {
 
       await recorderRef.current.startRecording();
       setIsRecording(true);
+
+      // Re-join the teacher's room to ensure we keep getting updates
+      if (currentTeacherId) {
+        socket.emit('joinTeacherRoom', currentTeacherId);
+      }
 
       // Handle stream end (when user stops sharing)
       stream.getVideoTracks()[0].onended = () => {
