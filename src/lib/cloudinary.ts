@@ -14,7 +14,7 @@ export const uploadSessionRecording = async (data: string): Promise<string> => {
       method: 'POST',
       body: formData,
     });
-
+    
     if (!response.ok) {
       throw new Error('Failed to upload to Cloudinary');
     }

@@ -2,6 +2,7 @@ import React, { useRef, useState, useEffect } from 'react';
 import { ReactSketchCanvas } from 'react-sketch-canvas';
 import { Play, X, Eraser } from 'lucide-react';
 import { io } from 'socket.io-client';
+import { SketchCanvas } from '../../types/whiteboard';
 
 const socket = io(import.meta.env.VITE_API_URL, {
   transports: ['websocket'],
@@ -11,11 +12,13 @@ const socket = io(import.meta.env.VITE_API_URL, {
 });
 
 const TeacherWhiteboard: React.FC = () => {
-  const canvasRef = useRef<any>(null);
+  const canvasRef = useRef<SketchCanvas>(null);
   const [isLive, setIsLive] = useState(false);
   const [showModal, setShowModal] = useState(false);
 
   useEffect(() => {
+    const userId = localStorage.getItem('userId');
+
     socket.on('connect', () => {
       console.log('Teacher connected to server');
     });
@@ -25,10 +28,10 @@ const TeacherWhiteboard: React.FC = () => {
       setIsLive(false);
     });
 
+    // Clean up on component unmount
     return () => {
       socket.off('connect');
       socket.off('disconnect');
-      const userId = localStorage.getItem('userId');
       if (userId && isLive) {
         socket.emit('stopLive', userId);
       }
@@ -39,40 +42,60 @@ const TeacherWhiteboard: React.FC = () => {
     setShowModal(true);
   };
 
-  const confirmStartLive = () => {
-    setIsLive(true);
-    setShowModal(false);
+  const confirmStartLive = async () => {
     const userId = localStorage.getItem('userId');
-    socket.emit('startLive', userId);
+    if (userId && canvasRef.current) {
+      setIsLive(true);
+      setShowModal(false);
+      socket.emit('startLive', userId);
+      
+      // Send initial canvas state
+      const paths = await canvasRef.current.exportPaths();
+      socket.emit('whiteboardUpdate', {
+        teacherId: userId,
+        whiteboardData: JSON.stringify(paths)
+      });
+    }
   };
 
   const handleStopLive = () => {
-    setIsLive(false);
     const userId = localStorage.getItem('userId');
-    socket.emit('stopLive', userId);
-    if (canvasRef.current) {
-      canvasRef.current.clearCanvas();
+    if (userId) {
+      setIsLive(false);
+      socket.emit('stopLive', userId);
+      if (canvasRef.current) {
+        canvasRef.current.clearCanvas();
+      }
     }
   };
 
   const handleStroke = async () => {
     if (isLive && canvasRef.current) {
-      const paths = await canvasRef.current.exportPaths();
-      const data = {
-        teacherId: localStorage.getItem('userId'),
-        whiteboardData: JSON.stringify(paths)
-      };
-      socket.emit('whiteboardUpdate', data);
+      try {
+        const paths = await canvasRef.current.exportPaths();
+        const userId = localStorage.getItem('userId');
+        if (userId) {
+          socket.emit('whiteboardUpdate', {
+            teacherId: userId,
+            whiteboardData: JSON.stringify(paths)
+          });
+        }
+      } catch (error) {
+        console.error('Error handling stroke:', error);
+      }
     }
   };
 
   const handleClearCanvas = async () => {
     if (canvasRef.current && isLive) {
       await canvasRef.current.clearCanvas();
-      socket.emit('whiteboardUpdate', {
-        teacherId: localStorage.getItem('userId'),
-        whiteboardData: JSON.stringify([])
-      });
+      const userId = localStorage.getItem('userId');
+      if (userId) {
+        socket.emit('whiteboardUpdate', {
+          teacherId: userId,
+          whiteboardData: JSON.stringify([])
+        });
+      }
     }
   };
 
@@ -93,8 +116,8 @@ const TeacherWhiteboard: React.FC = () => {
             <button
               onClick={isLive ? handleStopLive : handleStartLive}
               className={`flex items-center gap-2 px-4 py-2 rounded-md ${
-                isLive
-                  ? 'bg-red-500 hover:bg-red-600'
+                isLive 
+                  ? 'bg-red-500 hover:bg-red-600' 
                   : 'bg-green-500 hover:bg-green-600'
               } text-white`}
             >
@@ -110,26 +133,21 @@ const TeacherWhiteboard: React.FC = () => {
             </button>
           </div>
         </div>
-        {isLive ? (
-          <div className="border rounded-lg overflow-hidden bg-white">
-            <ReactSketchCanvas
-              ref={canvasRef}
-              strokeWidth={4}
-              strokeColor="black"
-              width="800px"
-              height="600px"
-              onStroke={handleStroke}
-              onChange={handleStroke}
-            />
-          </div>
-        ) : (
-          <div className="border rounded-lg overflow-hidden bg-white p-8 flex items-center justify-center min-h-[600px]">
-            <div className="text-center text-gray-500">
-              <p className="text-xl font-semibold mb-2">Whiteboard is not live</p>
-              <p>Click "Start Live" to begin the session</p>
-            </div>
-          </div>
-        )}
+        <div className="border rounded-lg overflow-hidden bg-white">
+          <ReactSketchCanvas
+            ref={canvasRef}
+            strokeWidth={4}
+            strokeColor="black"
+            width="800px"
+            height="600px"
+            onStroke={handleStroke}
+            onChange={handleStroke}
+            canvasColor="white"
+            exportWithBackgroundImage={false}
+            withTimestamp={false}
+            allowOnlyPointerType="all"
+          />
+        </div>
       </div>
 
       {/* Confirmation Modal */}
