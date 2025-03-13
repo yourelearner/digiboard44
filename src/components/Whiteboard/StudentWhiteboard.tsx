@@ -19,15 +19,10 @@ const StudentWhiteboard: React.FC = () => {
   const [whiteboardHistory, setWhiteboardHistory] = useState<string[]>([]);
   const [isTeacherLive, setIsTeacherLive] = useState(false);
   const [currentTeacherId, setCurrentTeacherId] = useState<string | null>(null);
-  const recordingInterval = useRef<number | null>(null);
+  const [currentPaths, setCurrentPaths] = useState<string>('[]');
 
   const handleStopRecording = useCallback(async () => {
     if (!isRecording || !recordingStartTime || !currentTeacherId) return;
-
-    if (recordingInterval.current) {
-      clearInterval(recordingInterval.current);
-      recordingInterval.current = null;
-    }
 
     setIsRecording(false);
 
@@ -72,6 +67,7 @@ const StudentWhiteboard: React.FC = () => {
         if (data.whiteboardData && data.whiteboardData !== '[]') {
           const paths = JSON.parse(data.whiteboardData);
           await canvasRef.current.loadPaths(paths);
+          setCurrentPaths(data.whiteboardData);
 
           if (isRecording) {
             setWhiteboardHistory(prev => [...prev, data.whiteboardData]);
@@ -95,6 +91,7 @@ const StudentWhiteboard: React.FC = () => {
       if (isRecording) {
         handleStopRecording();
       }
+      setCurrentPaths('[]');
     };
 
     socket.on('connect', () => {});
@@ -104,6 +101,7 @@ const StudentWhiteboard: React.FC = () => {
       if (isRecording) {
         handleStopRecording();
       }
+      setCurrentPaths('[]');
     });
 
     socket.on('whiteboardUpdate', handleWhiteboardUpdate);
@@ -120,10 +118,6 @@ const StudentWhiteboard: React.FC = () => {
       if (currentTeacherId) {
         socket.emit('leaveTeacherRoom', currentTeacherId);
       }
-
-      if (recordingInterval.current) {
-        clearInterval(recordingInterval.current);
-      }
     };
   }, [isRecording, currentTeacherId, handleStopRecording]);
 
@@ -134,7 +128,7 @@ const StudentWhiteboard: React.FC = () => {
     }
     setIsRecording(true);
     setRecordingStartTime(new Date());
-    setWhiteboardHistory([]);
+    setWhiteboardHistory([currentPaths]); // Start with current canvas state
   };
 
   if (!isTeacherLive) {
