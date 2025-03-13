@@ -21,6 +21,21 @@ const StudentWhiteboard: React.FC = () => {
   const [currentTeacherId, setCurrentTeacherId] = useState<string | null>(null);
   const [canvasSize, setCanvasSize] = useState({ width: 800, height: 600 });
 
+  const handleWhiteboardUpdate = useCallback(async (data: WhiteboardUpdate) => {
+    console.log('Received whiteboard update:', data);
+    if (canvasRef.current) {
+      try {
+        await canvasRef.current.clearCanvas();
+        if (data.whiteboardData && data.whiteboardData !== '[]') {
+          const paths = JSON.parse(data.whiteboardData);
+          await canvasRef.current.loadPaths(paths);
+        }
+      } catch (error) {
+        console.error('Error updating whiteboard:', error);
+      }
+    }
+  }, []);
+
   const handleStopRecording = useCallback(async () => {
     if (!recorderRef.current || !isRecording || !currentTeacherId) return;
 
@@ -28,8 +43,11 @@ const StudentWhiteboard: React.FC = () => {
       await recorderRef.current.stopRecording();
       const blob = await recorderRef.current.getBlob();
 
+      // Create a new Blob with proper MIME type
+      const videoBlob = new Blob([blob], { type: 'video/webm;codecs=vp9' });
+
       // Upload to Cloudinary
-      const videoUrl = await uploadSessionRecording(blob);
+      const videoUrl = await uploadSessionRecording(videoBlob);
 
       // Save session
       const response = await fetch(`${import.meta.env.VITE_API_URL}/api/sessions`, {
@@ -63,21 +81,6 @@ const StudentWhiteboard: React.FC = () => {
     }
   }, [isRecording, currentTeacherId]);
 
-  useEffect(() => {
-    const handleResize = () => {
-      const container = document.getElementById('student-whiteboard-container');
-      if (container) {
-        const width = container.clientWidth;
-        const height = Math.min(window.innerHeight - 200, width * 0.75);
-        setCanvasSize({ width, height });
-      }
-    };
-
-    handleResize();
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
-
   const handleStartRecording = async () => {
     if (!isTeacherLive) {
       alert('Cannot start recording when teacher is not live');
@@ -85,16 +88,25 @@ const StudentWhiteboard: React.FC = () => {
     }
 
     try {
+      const container = document.getElementById('student-whiteboard-container');
+      if (!container) {
+        throw new Error('Whiteboard container not found');
+      }
+
       const stream = await navigator.mediaDevices.getDisplayMedia({
         video: {
           displaySurface: 'browser',
+          width: { ideal: container.clientWidth },
+          height: { ideal: container.clientHeight },
+          frameRate: { ideal: 30 }
         }
       });
 
       recorderRef.current = new RecordRTCPromisesHandler(stream, {
         type: 'video',
         mimeType: 'video/webm;codecs=vp9',
-        bitsPerSecond: 128000
+        bitsPerSecond: 3000000, // 3 Mbps for better quality
+        frameInterval: 30
       });
 
       await recorderRef.current.startRecording();
@@ -111,23 +123,30 @@ const StudentWhiteboard: React.FC = () => {
   };
 
   useEffect(() => {
-    const handleWhiteboardUpdate = async (data: WhiteboardUpdate) => {
-      if (canvasRef.current) {
-        await canvasRef.current.clearCanvas();
-        if (data.whiteboardData && data.whiteboardData !== '[]') {
-          const paths = JSON.parse(data.whiteboardData);
-          await canvasRef.current.loadPaths(paths);
-        }
+    const handleResize = () => {
+      const container = document.getElementById('student-whiteboard-container');
+      if (container) {
+        const width = container.clientWidth;
+        const height = Math.min(window.innerHeight - 200, width * 0.75);
+        setCanvasSize({ width, height });
       }
     };
 
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  useEffect(() => {
     const handleTeacherOnline = (data: TeacherStatus) => {
+      console.log('Teacher online:', data);
       setIsTeacherLive(true);
       setCurrentTeacherId(data.teacherId);
       socket.emit('joinTeacherRoom', data.teacherId);
     };
 
     const handleTeacherOffline = () => {
+      console.log('Teacher offline');
       setIsTeacherLive(false);
       setCurrentTeacherId(null);
       if (canvasRef.current) {
@@ -138,8 +157,12 @@ const StudentWhiteboard: React.FC = () => {
       }
     };
 
-    socket.on('connect', () => {});
+    socket.on('connect', () => {
+      console.log('Connected to server');
+    });
+
     socket.on('disconnect', () => {
+      console.log('Disconnected from server');
       setIsTeacherLive(false);
       setCurrentTeacherId(null);
       if (isRecording) {
@@ -162,7 +185,7 @@ const StudentWhiteboard: React.FC = () => {
         socket.emit('leaveTeacherRoom', currentTeacherId);
       }
     };
-  }, [isRecording, currentTeacherId, handleStopRecording]);
+  }, [isRecording, currentTeacherId, handleStopRecording, handleWhiteboardUpdate]);
 
   if (!isTeacherLive) {
     return (
