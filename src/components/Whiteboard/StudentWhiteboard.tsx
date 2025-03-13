@@ -1,8 +1,8 @@
-import React, { useRef, useState, useEffect } from 'react';
-import { ReactSketchCanvas } from 'react-sketch-canvas';
+import React, { useRef, useState, useEffect, useCallback } from 'react';
+import { ReactSketchCanvas, ReactSketchCanvasRef } from 'react-sketch-canvas';
 import { Video, Square } from 'lucide-react';
 import { io, Socket } from 'socket.io-client';
-import RecordRTC, { RecordRTCPromisesHandler } from 'recordrtc';
+import { RecordRTCPromisesHandler } from 'recordrtc';
 import { uploadSessionRecording } from '../../lib/cloudinary';
 import { WhiteboardUpdate, TeacherStatus } from '../../types/socket';
 
@@ -14,12 +14,54 @@ const socket: Socket = io(import.meta.env.VITE_API_URL, {
 });
 
 const StudentWhiteboard: React.FC = () => {
-  const canvasRef = useRef<any>(null);
+  const canvasRef = useRef<ReactSketchCanvasRef | null>(null);
   const recorderRef = useRef<RecordRTCPromisesHandler | null>(null);
   const [isRecording, setIsRecording] = useState(false);
   const [isTeacherLive, setIsTeacherLive] = useState(false);
   const [currentTeacherId, setCurrentTeacherId] = useState<string | null>(null);
   const [canvasSize, setCanvasSize] = useState({ width: 800, height: 600 });
+
+  const handleStopRecording = useCallback(async () => {
+    if (!recorderRef.current || !isRecording || !currentTeacherId) return;
+
+    try {
+      await recorderRef.current.stopRecording();
+      const blob = await recorderRef.current.getBlob();
+
+      // Upload to Cloudinary
+      const videoUrl = await uploadSessionRecording(blob);
+
+      // Save session
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/sessions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify({
+          teacherId: currentTeacherId,
+          videoUrl,
+          whiteboardData: '[]'
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to save session');
+      }
+
+      // Cleanup
+      const tracks = recorderRef.current.getState().stream.getTracks();
+      tracks.forEach(track => track.stop());
+      recorderRef.current = null;
+      setIsRecording(false);
+
+      alert('Recording saved successfully!');
+    } catch (error) {
+      console.error('Error saving recording:', error);
+      alert('Failed to save recording. Please try again.');
+      setIsRecording(false);
+    }
+  }, [isRecording, currentTeacherId]);
 
   useEffect(() => {
     const handleResize = () => {
@@ -65,48 +107,6 @@ const StudentWhiteboard: React.FC = () => {
     } catch (error) {
       console.error('Error starting recording:', error);
       alert('Failed to start recording. Please try again.');
-    }
-  };
-
-  const handleStopRecording = async () => {
-    if (!recorderRef.current || !isRecording) return;
-
-    try {
-      await recorderRef.current.stopRecording();
-      const blob = await recorderRef.current.getBlob();
-
-      // Upload to Cloudinary
-      const videoUrl = await uploadSessionRecording(blob);
-
-      // Save session
-      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/sessions`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
-        body: JSON.stringify({
-          teacherId: currentTeacherId,
-          videoUrl,
-          whiteboardData: '[]'
-        })
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to save session');
-      }
-
-      // Cleanup
-      const tracks = recorderRef.current.getState().stream.getTracks();
-      tracks.forEach(track => track.stop());
-      recorderRef.current = null;
-      setIsRecording(false);
-
-      alert('Recording saved successfully!');
-    } catch (error) {
-      console.error('Error saving recording:', error);
-      alert('Failed to save recording. Please try again.');
-      setIsRecording(false);
     }
   };
 
@@ -162,7 +162,7 @@ const StudentWhiteboard: React.FC = () => {
         socket.emit('leaveTeacherRoom', currentTeacherId);
       }
     };
-  }, [isRecording, currentTeacherId]);
+  }, [isRecording, currentTeacherId, handleStopRecording]);
 
   if (!isTeacherLive) {
     return (
@@ -215,7 +215,6 @@ const StudentWhiteboard: React.FC = () => {
           exportWithBackgroundImage={false}
           withTimestamp={false}
           allowOnlyPointerType="all"
-          readOnly={true}
           className="touch-none"
         />
       </div>
