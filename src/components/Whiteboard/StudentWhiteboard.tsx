@@ -20,9 +20,15 @@ const StudentWhiteboard: React.FC = () => {
   const [isTeacherLive, setIsTeacherLive] = useState(false);
   const [currentTeacherId, setCurrentTeacherId] = useState<string | null>(null);
   const [currentPaths, setCurrentPaths] = useState<string>('[]');
+  const recordingInterval = useRef<number | null>(null);
 
   const handleStopRecording = useCallback(async () => {
     if (!isRecording || !recordingStartTime || !currentTeacherId) return;
+
+    if (recordingInterval.current) {
+      clearInterval(recordingInterval.current);
+      recordingInterval.current = null;
+    }
 
     setIsRecording(false);
 
@@ -30,8 +36,7 @@ const StudentWhiteboard: React.FC = () => {
       const recordingData = {
         history: whiteboardHistory,
         startTime: recordingStartTime,
-        endTime: new Date(),
-        currentPaths
+        endTime: new Date()
       };
 
       const videoUrl = await uploadSessionRecording(JSON.stringify(recordingData));
@@ -59,7 +64,7 @@ const StudentWhiteboard: React.FC = () => {
       console.error('Error saving recording:', error);
       alert('Failed to save recording. Please try again.');
     }
-  }, [isRecording, recordingStartTime, currentTeacherId, whiteboardHistory, currentPaths]);
+  }, [isRecording, recordingStartTime, currentTeacherId, whiteboardHistory]);
 
   useEffect(() => {
     const handleWhiteboardUpdate = async (data: WhiteboardUpdate) => {
@@ -69,10 +74,6 @@ const StudentWhiteboard: React.FC = () => {
           const paths = JSON.parse(data.whiteboardData);
           await canvasRef.current.loadPaths(paths);
           setCurrentPaths(data.whiteboardData);
-
-          if (isRecording) {
-            setWhiteboardHistory(prev => [...prev, data.whiteboardData]);
-          }
         }
       }
     };
@@ -117,6 +118,10 @@ const StudentWhiteboard: React.FC = () => {
       if (currentTeacherId) {
         socket.emit('leaveTeacherRoom', currentTeacherId);
       }
+
+      if (recordingInterval.current) {
+        clearInterval(recordingInterval.current);
+      }
     };
   }, [isRecording, currentTeacherId, handleStopRecording]);
 
@@ -128,6 +133,14 @@ const StudentWhiteboard: React.FC = () => {
     setIsRecording(true);
     setRecordingStartTime(new Date());
     setWhiteboardHistory([currentPaths]);
+
+    // Capture frames at regular intervals
+    recordingInterval.current = window.setInterval(async () => {
+      if (canvasRef.current) {
+        const paths = await canvasRef.current.exportPaths();
+        setWhiteboardHistory(prev => [...prev, JSON.stringify(paths)]);
+      }
+    }, 100); // Capture every 100ms
   };
 
   if (!isTeacherLive) {

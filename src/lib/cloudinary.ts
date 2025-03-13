@@ -1,5 +1,5 @@
 const CLOUDINARY_CLOUD_NAME = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME;
-const CLOUDINARY_UPLOAD_URL = `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/video/upload`;
+const CLOUDINARY_UPLOAD_URL = `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/upload`;
 const UPLOAD_PRESET = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET;
 
 const createVideoFromFrames = async (frames: string[]): Promise<Blob> => {
@@ -7,18 +7,20 @@ const createVideoFromFrames = async (frames: string[]): Promise<Blob> => {
   canvas.width = 800;
   canvas.height = 600;
   const ctx = canvas.getContext('2d')!;
-  const tempCanvas = document.createElement('canvas');
-  const tempCtx = tempCanvas.getContext('2d')!;
-  tempCanvas.width = 800;
-  tempCanvas.height = 600;
 
-  const mediaRecorder = new MediaRecorder(canvas.captureStream(30), {
-    mimeType: 'video/webm'
+  const stream = canvas.captureStream(30);
+  const mediaRecorder = new MediaRecorder(stream, {
+    mimeType: 'video/webm;codecs=vp9'
   });
+
   const chunks: Blob[] = [];
+  mediaRecorder.ondataavailable = (e) => {
+    if (e.data.size > 0) {
+      chunks.push(e.data);
+    }
+  };
 
   return new Promise((resolve) => {
-    mediaRecorder.ondataavailable = (e) => chunks.push(e.data);
     mediaRecorder.onstop = () => {
       const blob = new Blob(chunks, { type: 'video/webm' });
       resolve(blob);
@@ -33,44 +35,62 @@ const createVideoFromFrames = async (frames: string[]): Promise<Blob> => {
         return;
       }
 
+      // Clear canvas
       ctx.fillStyle = 'white';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-      const paths = JSON.parse(frames[frameIndex]);
-      paths.forEach((path: any) => {
-        ctx.beginPath();
-        ctx.strokeStyle = path.strokeColor;
-        ctx.lineWidth = path.strokeWidth;
+      try {
+        const paths = JSON.parse(frames[frameIndex]);
+        if (Array.isArray(paths)) {
+          paths.forEach((path) => {
+            if (path.paths && path.paths[0]) {
+              ctx.beginPath();
+              ctx.strokeStyle = path.strokeColor || 'black';
+              ctx.lineWidth = path.strokeWidth || 4;
 
-        const points = path.paths[0];
-        if (points.length > 0) {
-          ctx.moveTo(points[0].x, points[0].y);
-          points.forEach((point: any, i: number) => {
-            if (i > 0) ctx.lineTo(point.x, point.y);
+              const points = path.paths[0];
+              if (points.length > 0) {
+                ctx.moveTo(points[0].x, points[0].y);
+                points.forEach((point: any, i: number) => {
+                  if (i > 0) ctx.lineTo(point.x, point.y);
+                });
+              }
+              ctx.stroke();
+            }
           });
         }
-        ctx.stroke();
-      });
+      } catch (error) {
+        console.error('Error drawing frame:', error);
+      }
 
       frameIndex++;
-      setTimeout(drawFrame, 1000 / 30); // 30 FPS
+      requestAnimationFrame(drawFrame);
     };
 
+    // Start animation loop
     drawFrame();
   });
 };
 
 export const uploadSessionRecording = async (data: string): Promise<string> => {
-  const recordingData = JSON.parse(data);
-  const videoBlob = await createVideoFromFrames(recordingData.history);
-
-  const formData = new FormData();
-  formData.append('file', videoBlob, 'recording.webm');
-  formData.append('upload_preset', UPLOAD_PRESET);
-  formData.append('folder', 'session_recordings');
-  formData.append('resource_type', 'video');
-
   try {
+    const recordingData = JSON.parse(data);
+
+    if (!Array.isArray(recordingData.history) || recordingData.history.length === 0) {
+      throw new Error('No recording data available');
+    }
+
+    const videoBlob = await createVideoFromFrames(recordingData.history);
+
+    if (videoBlob.size === 0) {
+      throw new Error('Generated video is empty');
+    }
+
+    const formData = new FormData();
+    formData.append('file', videoBlob, 'recording.webm');
+    formData.append('upload_preset', UPLOAD_PRESET);
+    formData.append('resource_type', 'video');
+
     const response = await fetch(CLOUDINARY_UPLOAD_URL, {
       method: 'POST',
       body: formData,
@@ -85,7 +105,7 @@ export const uploadSessionRecording = async (data: string): Promise<string> => {
     const result = await response.json();
     return result.secure_url;
   } catch (error) {
-    console.error('Error uploading to Cloudinary:', error);
+    console.error('Error in uploadSessionRecording:', error);
     throw error;
   }
 };
