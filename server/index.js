@@ -18,8 +18,8 @@ const io = new Server(httpServer, {
   }
 });
 
-// Keep track of live teachers
-const liveTeachers = new Set();
+// Keep track of live teachers and their sockets
+const liveTeachers = new Map(); // teacherId -> Set of student sockets
 
 // Middleware
 app.use(cors({
@@ -34,41 +34,64 @@ app.use('/api/sessions', sessionRoutes);
 // Socket.IO connection handling
 io.on('connection', (socket) => {
   console.log('A user connected');
+  let currentTeacherId = null;
+  let isStudent = false;
 
   // Handle teacher status check
   socket.on('checkTeacherStatus', () => {
     // Send current live teachers to the requesting client
-    liveTeachers.forEach(teacherId => {
+    for (const teacherId of liveTeachers.keys()) {
       socket.emit('teacherOnline', { teacherId });
-    });
+    }
   });
 
   socket.on('startLive', (teacherId) => {
-    console.log('Teacher started live session:', teacherId);
-    liveTeachers.add(teacherId);
-    socket.join(`teacher-${teacherId}`);
-    io.emit('teacherOnline', { teacherId });
+    if (!liveTeachers.has(teacherId)) {
+      console.log('Teacher started live session:', teacherId);
+      liveTeachers.set(teacherId, new Set());
+      currentTeacherId = teacherId;
+      socket.join(`teacher-${teacherId}`);
+      io.emit('teacherOnline', { teacherId });
+    }
   });
 
   socket.on('stopLive', (teacherId) => {
     console.log('Teacher stopped live session:', teacherId);
-    liveTeachers.delete(teacherId);
-    io.emit('teacherOffline', { teacherId });
-    socket.leave(`teacher-${teacherId}`);
+    if (liveTeachers.has(teacherId)) {
+      const students = liveTeachers.get(teacherId);
+      students.forEach(studentSocket => {
+        studentSocket.leave(`teacher-${teacherId}`);
+      });
+      liveTeachers.delete(teacherId);
+      io.emit('teacherOffline', { teacherId });
+    }
+    if (currentTeacherId === teacherId) {
+      socket.leave(`teacher-${teacherId}`);
+      currentTeacherId = null;
+    }
   });
 
   socket.on('joinTeacherRoom', (teacherId) => {
-    console.log('Student joined teacher room:', teacherId);
-    socket.join(`teacher-${teacherId}`);
-    // If teacher is live, immediately send the status
     if (liveTeachers.has(teacherId)) {
+      console.log('Student joined teacher room:', teacherId);
+      socket.join(`teacher-${teacherId}`);
+      liveTeachers.get(teacherId).add(socket);
+      isStudent = true;
+      currentTeacherId = teacherId;
+      // Send a single teacherOnline event to the joining student
       socket.emit('teacherOnline', { teacherId });
     }
   });
 
   socket.on('leaveTeacherRoom', (teacherId) => {
     console.log('Student left teacher room:', teacherId);
+    if (liveTeachers.has(teacherId)) {
+      liveTeachers.get(teacherId).delete(socket);
+    }
     socket.leave(`teacher-${teacherId}`);
+    if (currentTeacherId === teacherId) {
+      currentTeacherId = null;
+    }
   });
 
   socket.on('whiteboardUpdate', (data) => {
@@ -79,6 +102,24 @@ io.on('connection', (socket) => {
 
   socket.on('disconnect', () => {
     console.log('User disconnected');
+    if (currentTeacherId) {
+      if (isStudent) {
+        // Remove student from teacher's list
+        if (liveTeachers.has(currentTeacherId)) {
+          liveTeachers.get(currentTeacherId).delete(socket);
+        }
+      } else {
+        // If teacher disconnects, clean up their room
+        if (liveTeachers.has(currentTeacherId)) {
+          const students = liveTeachers.get(currentTeacherId);
+          students.forEach(studentSocket => {
+            studentSocket.leave(`teacher-${currentTeacherId}`);
+          });
+          liveTeachers.delete(currentTeacherId);
+          io.emit('teacherOffline', { teacherId: currentTeacherId });
+        }
+      }
+    }
   });
 });
 

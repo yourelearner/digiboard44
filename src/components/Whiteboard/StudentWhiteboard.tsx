@@ -23,12 +23,12 @@ const StudentWhiteboard: React.FC = () => {
   const [isRecording, setIsRecording] = useState(false);
   const lastUpdateRef = useRef<string>('[]');
   const recordingAttemptedRef = useRef(false);
+  const teacherStatusTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const handleWhiteboardUpdate = useCallback(async (data: WhiteboardUpdate) => {
     if (!canvasRef.current) return;
 
     try {
-      // Store the latest update
       lastUpdateRef.current = data.whiteboardData;
 
       await canvasRef.current.clearCanvas();
@@ -66,15 +66,9 @@ const StudentWhiteboard: React.FC = () => {
       }
 
       const videoBlob = new Blob([blob], { type: 'video/webm' });
-
-      console.log('Uploading recording to Cloudinary...');
       const videoUrl = await uploadSessionRecording(videoBlob);
-      console.log('Upload successful, video URL:', videoUrl);
-
-      // Use the latest whiteboard data
       const whiteboardData = lastUpdateRef.current;
 
-      console.log('Saving session to backend...');
       const response = await fetch(`${import.meta.env.VITE_API_URL}/api/sessions`, {
         method: 'POST',
         headers: {
@@ -107,7 +101,6 @@ const StudentWhiteboard: React.FC = () => {
     recordingAttemptedRef.current = true;
 
     try {
-      console.log('Starting recording...');
       const container = document.getElementById('student-whiteboard-container');
       if (!container) {
         throw new Error('Whiteboard container not found');
@@ -131,7 +124,6 @@ const StudentWhiteboard: React.FC = () => {
 
       await recorderRef.current.startRecording();
       setIsRecording(true);
-      console.log('Recording started successfully');
 
       stream.getVideoTracks()[0].onended = () => {
         handleStopRecording();
@@ -146,11 +138,6 @@ const StudentWhiteboard: React.FC = () => {
       }
     }
   }, [handleStopRecording, isRecording, isTeacherLive, cleanupRecording]);
-
-  // Check for active teacher on mount
-  useEffect(() => {
-    socket.emit('checkTeacherStatus');
-  }, []);
 
   // Handle window resize
   useEffect(() => {
@@ -170,20 +157,29 @@ const StudentWhiteboard: React.FC = () => {
 
   // Socket event handlers
   useEffect(() => {
-    const handleTeacherOnline = async (data: TeacherStatus) => {
-      console.log('Teacher online:', data);
-      setIsTeacherLive(true);
-      setCurrentTeacherId(data.teacherId);
-      socket.emit('joinTeacherRoom', data.teacherId);
+    const handleTeacherOnline = (data: TeacherStatus) => {
+      // Clear any existing timeout
+      if (teacherStatusTimeoutRef.current) {
+        clearTimeout(teacherStatusTimeoutRef.current);
+        teacherStatusTimeoutRef.current = null;
+      }
 
-      // Start recording with a slight delay to ensure UI is ready
-      setTimeout(() => {
-        startRecording();
-      }, 1000);
+      // Only update state if teacher status has changed
+      if (!isTeacherLive || currentTeacherId !== data.teacherId) {
+        setIsTeacherLive(true);
+        setCurrentTeacherId(data.teacherId);
+        socket.emit('joinTeacherRoom', data.teacherId);
+
+        // Start recording with a delay only if not already recording
+        if (!isRecording && !recordingAttemptedRef.current) {
+          teacherStatusTimeoutRef.current = setTimeout(() => {
+            startRecording();
+          }, 1000);
+        }
+      }
     };
 
     const handleTeacherOffline = () => {
-      console.log('Teacher offline');
       if (isRecording) {
         handleStopRecording();
       }
@@ -195,27 +191,24 @@ const StudentWhiteboard: React.FC = () => {
     };
 
     const handleConnect = () => {
-      console.log('Connected to server');
-      if (currentTeacherId) {
-        socket.emit('joinTeacherRoom', currentTeacherId);
-      }
+      socket.emit('checkTeacherStatus');
     };
 
     const handleDisconnect = () => {
-      console.log('Disconnected from server');
       if (isRecording) {
         handleStopRecording();
       }
     };
 
-    // Register event handlers
     socket.on('whiteboardUpdate', handleWhiteboardUpdate);
     socket.on('teacherOnline', handleTeacherOnline);
     socket.on('teacherOffline', handleTeacherOffline);
     socket.on('connect', handleConnect);
     socket.on('disconnect', handleDisconnect);
 
-    // Cleanup
+    // Initial check for teacher status
+    socket.emit('checkTeacherStatus');
+
     return () => {
       socket.off('whiteboardUpdate', handleWhiteboardUpdate);
       socket.off('teacherOnline', handleTeacherOnline);
@@ -226,6 +219,9 @@ const StudentWhiteboard: React.FC = () => {
       if (currentTeacherId) {
         socket.emit('leaveTeacherRoom', currentTeacherId);
       }
+      if (teacherStatusTimeoutRef.current) {
+        clearTimeout(teacherStatusTimeoutRef.current);
+      }
       cleanupRecording();
     };
   }, [
@@ -234,7 +230,8 @@ const StudentWhiteboard: React.FC = () => {
     isRecording,
     currentTeacherId,
     startRecording,
-    cleanupRecording
+    cleanupRecording,
+    isTeacherLive
   ]);
 
   if (!isTeacherLive) {
