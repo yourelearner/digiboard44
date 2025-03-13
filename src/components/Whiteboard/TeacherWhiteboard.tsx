@@ -1,8 +1,7 @@
-import React, { useRef, useState, useEffect } from 'react';
-import { ReactSketchCanvas } from 'react-sketch-canvas';
+import React, { useRef, useState, useEffect, useCallback } from 'react';
+import { ReactSketchCanvas, ReactSketchCanvasRef } from 'react-sketch-canvas';
 import { Play, X, Eraser } from 'lucide-react';
 import { io } from 'socket.io-client';
-import { SketchCanvas } from '../../types/whiteboard';
 
 const socket = io(import.meta.env.VITE_API_URL, {
   transports: ['websocket'],
@@ -12,7 +11,7 @@ const socket = io(import.meta.env.VITE_API_URL, {
 });
 
 const TeacherWhiteboard: React.FC = () => {
-  const canvasRef = useRef<SketchCanvas>(null);
+  const canvasRef = useRef<ReactSketchCanvasRef | null>(null);
   const [isLive, setIsLive] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [canvasSize, setCanvasSize] = useState({ width: 800, height: 600 });
@@ -22,7 +21,7 @@ const TeacherWhiteboard: React.FC = () => {
       const container = document.getElementById('whiteboard-container');
       if (container) {
         const width = container.clientWidth;
-        const height = Math.min(window.innerHeight - 200, width * 0.75); // 4:3 aspect ratio
+        const height = Math.min(window.innerHeight - 200, width * 0.75);
         setCanvasSize({ width, height });
       }
     };
@@ -35,8 +34,15 @@ const TeacherWhiteboard: React.FC = () => {
   useEffect(() => {
     const userId = localStorage.getItem('userId');
 
-    socket.on('connect', () => {});
+    socket.on('connect', () => {
+      console.log('Connected to server');
+      if (isLive && userId) {
+        socket.emit('startLive', userId);
+      }
+    });
+
     socket.on('disconnect', () => {
+      console.log('Disconnected from server');
       setIsLive(false);
     });
 
@@ -59,7 +65,7 @@ const TeacherWhiteboard: React.FC = () => {
       setIsLive(true);
       setShowModal(false);
       socket.emit('startLive', userId);
-      
+
       const paths = await canvasRef.current.exportPaths();
       socket.emit('whiteboardUpdate', {
         teacherId: userId,
@@ -79,12 +85,13 @@ const TeacherWhiteboard: React.FC = () => {
     }
   };
 
-  const handleStroke = async () => {
+  const handleStroke = useCallback(async () => {
     if (isLive && canvasRef.current) {
       try {
         const paths = await canvasRef.current.exportPaths();
         const userId = localStorage.getItem('userId');
         if (userId) {
+          console.log('Sending whiteboard update');
           socket.emit('whiteboardUpdate', {
             teacherId: userId,
             whiteboardData: JSON.stringify(paths)
@@ -94,7 +101,7 @@ const TeacherWhiteboard: React.FC = () => {
         console.error('Error handling stroke:', error);
       }
     }
-  };
+  }, [isLive]);
 
   const handleClearCanvas = async () => {
     if (canvasRef.current && isLive) {
@@ -126,8 +133,8 @@ const TeacherWhiteboard: React.FC = () => {
             <button
               onClick={isLive ? handleStopLive : handleStartLive}
               className={`flex items-center gap-2 px-4 py-2 rounded-md ${
-                isLive 
-                  ? 'bg-red-500 hover:bg-red-600' 
+                isLive
+                  ? 'bg-red-500 hover:bg-red-600'
                   : 'bg-green-500 hover:bg-green-600'
               } text-white`}
             >
@@ -150,13 +157,12 @@ const TeacherWhiteboard: React.FC = () => {
             strokeColor="black"
             width={`${canvasSize.width}px`}
             height={`${canvasSize.height}px`}
-            onStroke={handleStroke}
-            onChange={handleStroke}
             canvasColor="white"
             exportWithBackgroundImage={false}
             withTimestamp={false}
             allowOnlyPointerType="all"
             className="touch-none"
+            onStroke={handleStroke}
           />
         </div>
       </div>

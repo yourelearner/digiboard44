@@ -43,14 +43,12 @@ const StudentWhiteboard: React.FC = () => {
       await recorderRef.current.stopRecording();
       const blob = await recorderRef.current.getBlob();
 
-      // Create a new Blob with proper MIME type
       const videoBlob = new Blob([blob], { type: 'video/webm' });
 
       console.log('Uploading recording to Cloudinary...');
       const videoUrl = await uploadSessionRecording(videoBlob);
       console.log('Upload successful, video URL:', videoUrl);
 
-      // Get current whiteboard data
       const whiteboardData = canvasRef.current ?
         JSON.stringify(await canvasRef.current.exportPaths()) :
         '[]';
@@ -75,7 +73,6 @@ const StudentWhiteboard: React.FC = () => {
         throw new Error('Failed to save session');
       }
 
-      // Cleanup
       const tracks = recorderRef.current.getState().stream.getTracks();
       tracks.forEach(track => track.stop());
       recorderRef.current = null;
@@ -118,7 +115,6 @@ const StudentWhiteboard: React.FC = () => {
       await recorderRef.current.startRecording();
       setIsRecording(true);
 
-      // Stop recording when stream ends (user clicks stop sharing)
       stream.getVideoTracks()[0].onended = () => {
         handleStopRecording();
       };
@@ -144,14 +140,15 @@ const StudentWhiteboard: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    const handleTeacherOnline = (data: TeacherStatus) => {
+    socket.on('whiteboardUpdate', handleWhiteboardUpdate);
+    socket.on('teacherOnline', (data: TeacherStatus) => {
       console.log('Teacher online:', data);
       setIsTeacherLive(true);
       setCurrentTeacherId(data.teacherId);
       socket.emit('joinTeacherRoom', data.teacherId);
-    };
+    });
 
-    const handleTeacherOffline = () => {
+    socket.on('teacherOffline', () => {
       console.log('Teacher offline');
       setIsTeacherLive(false);
       setCurrentTeacherId(null);
@@ -161,13 +158,10 @@ const StudentWhiteboard: React.FC = () => {
       if (isRecording) {
         handleStopRecording();
       }
-    };
+    });
 
     socket.on('connect', () => {
       console.log('Connected to server');
-      socket.on('whiteboardUpdate', handleWhiteboardUpdate);
-      socket.on('teacherOnline', handleTeacherOnline);
-      socket.on('teacherOffline', handleTeacherOffline);
     });
 
     socket.on('disconnect', () => {
@@ -180,9 +174,9 @@ const StudentWhiteboard: React.FC = () => {
     });
 
     return () => {
-      socket.off('whiteboardUpdate', handleWhiteboardUpdate);
-      socket.off('teacherOnline', handleTeacherOnline);
-      socket.off('teacherOffline', handleTeacherOffline);
+      socket.off('whiteboardUpdate');
+      socket.off('teacherOnline');
+      socket.off('teacherOffline');
       socket.off('connect');
       socket.off('disconnect');
 
@@ -190,7 +184,7 @@ const StudentWhiteboard: React.FC = () => {
         socket.emit('leaveTeacherRoom', currentTeacherId);
       }
     };
-  }, [handleStopRecording, handleWhiteboardUpdate, isRecording]);
+  }, [handleStopRecording, handleWhiteboardUpdate, isRecording, currentTeacherId]);
 
   if (!isTeacherLive) {
     return (
