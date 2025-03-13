@@ -247,25 +247,26 @@ const StudentWhiteboard: React.FC = () => {
             {isSaving ? 'Saving recording...' : isRecording ? 'Recording in progress...' : 'Session in progress'}
           </p>
         </div>
-        <button
-          onClick={isRecording ? handleStopRecording : handleStartRecording}
-          disabled={isSaving}
-          className={`flex items-center gap-2 px-4 py-2 rounded-md ${
-            isRecording
-              ? 'bg-red-500 hover:bg-red-600'
-              : 'bg-green-500 hover:bg-green-600'
-          } text-white transition-colors ${isSaving ? 'opacity-50 cursor-not-allowed' : ''}`}
-        >
-          {isRecording ? (
-            <>
-              <Square size={20} /> Stop Recording
-            </>
-          ) : (
-            <>
-              <Video size={20} /> Start Recording
-            </>
-          )}
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={handleStartRecording}
+            disabled={isRecording || isSaving}
+            className={`flex items-center gap-2 px-4 py-2 rounded-md bg-green-500 hover:bg-green-600 text-white transition-colors ${
+              (isRecording || isSaving) ? 'opacity-50 cursor-not-allowed' : ''
+            }`}
+          >
+            <Video size={20} /> Start Recording
+          </button>
+          <button
+            onClick={handleStopRecording}
+            disabled={!isRecording || isSaving}
+            className={`flex items-center gap-2 px-4 py-2 rounded-md bg-red-500 hover:bg-red-600 text-white transition-colors ${
+              (!isRecording || isSaving) ? 'opacity-50 cursor-not-allowed' : ''
+            }`}
+          >
+            <Square size={20} /> Stop Recording
+          </button>
+        </div>
       </div>
       <div id="student-whiteboard-container" className="border rounded-lg overflow-hidden bg-white">
         <ReactSketchCanvas
