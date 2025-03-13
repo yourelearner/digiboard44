@@ -34,21 +34,25 @@ const TeacherWhiteboard: React.FC = () => {
   useEffect(() => {
     const userId = localStorage.getItem('userId');
 
-    socket.on('connect', () => {
+    const handleConnect = () => {
       console.log('Connected to server');
       if (isLive && userId) {
         socket.emit('startLive', userId);
+        handleStroke(); // Send current canvas state
       }
-    });
+    };
 
-    socket.on('disconnect', () => {
+    const handleDisconnect = () => {
       console.log('Disconnected from server');
       setIsLive(false);
-    });
+    };
+
+    socket.on('connect', handleConnect);
+    socket.on('disconnect', handleDisconnect);
 
     return () => {
-      socket.off('connect');
-      socket.off('disconnect');
+      socket.off('connect', handleConnect);
+      socket.off('disconnect', handleDisconnect);
       if (userId && isLive) {
         socket.emit('stopLive', userId);
       }
@@ -66,6 +70,7 @@ const TeacherWhiteboard: React.FC = () => {
       setShowModal(false);
       socket.emit('startLive', userId);
 
+      // Send initial canvas state
       const paths = await canvasRef.current.exportPaths();
       socket.emit('whiteboardUpdate', {
         teacherId: userId,
@@ -163,6 +168,7 @@ const TeacherWhiteboard: React.FC = () => {
             allowOnlyPointerType="all"
             className="touch-none"
             onStroke={handleStroke}
+            onChange={handleStroke}
           />
         </div>
       </div>
