@@ -19,8 +19,8 @@ const StudentWhiteboard: React.FC = () => {
   const [whiteboardHistory, setWhiteboardHistory] = useState<string[]>([]);
   const [isTeacherLive, setIsTeacherLive] = useState(false);
   const [currentTeacherId, setCurrentTeacherId] = useState<string | null>(null);
-  const [currentPaths, setCurrentPaths] = useState<string>('[]');
   const [canvasSize, setCanvasSize] = useState({ width: 800, height: 600 });
+  const recordingInterval = useRef<number | null>(null);
 
   useEffect(() => {
     const handleResize = () => {
@@ -37,12 +37,45 @@ const StudentWhiteboard: React.FC = () => {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
+  const captureFrame = async () => {
+    if (canvasRef.current) {
+      const paths = await canvasRef.current.exportPaths();
+      setWhiteboardHistory(prev => [...prev, JSON.stringify(paths)]);
+    }
+  };
+
+  const handleStartRecording = async () => {
+    if (!isTeacherLive) {
+      alert('Cannot start recording when teacher is not live');
+      return;
+    }
+
+    setIsRecording(true);
+    setRecordingStartTime(new Date());
+    setWhiteboardHistory([]);
+
+    // Capture initial frame
+    await captureFrame();
+
+    // Start capturing frames at regular intervals
+    recordingInterval.current = window.setInterval(captureFrame, 100); // Capture every 100ms
+  };
+
   const handleStopRecording = useCallback(async () => {
     if (!isRecording || !recordingStartTime || !currentTeacherId) return;
-    
+
+    // Clear the recording interval
+    if (recordingInterval.current) {
+      clearInterval(recordingInterval.current);
+      recordingInterval.current = null;
+    }
+
     setIsRecording(false);
 
     try {
+      // Capture final frame
+      await captureFrame();
+
       const recordingData = {
         history: whiteboardHistory,
         startTime: recordingStartTime,
@@ -83,11 +116,6 @@ const StudentWhiteboard: React.FC = () => {
         if (data.whiteboardData && data.whiteboardData !== '[]') {
           const paths = JSON.parse(data.whiteboardData);
           await canvasRef.current.loadPaths(paths);
-          setCurrentPaths(data.whiteboardData);
-          
-          if (isRecording) {
-            setWhiteboardHistory(prev => [...prev, data.whiteboardData]);
-          }
         }
       }
     };
@@ -107,7 +135,6 @@ const StudentWhiteboard: React.FC = () => {
       if (isRecording) {
         handleStopRecording();
       }
-      setCurrentPaths('[]');
     };
 
     socket.on('connect', () => {});
@@ -117,7 +144,6 @@ const StudentWhiteboard: React.FC = () => {
       if (isRecording) {
         handleStopRecording();
       }
-      setCurrentPaths('[]');
     });
 
     socket.on('whiteboardUpdate', handleWhiteboardUpdate);
@@ -125,27 +151,22 @@ const StudentWhiteboard: React.FC = () => {
     socket.on('teacherOffline', handleTeacherOffline);
 
     return () => {
+      // Clean up recording interval
+      if (recordingInterval.current) {
+        clearInterval(recordingInterval.current);
+      }
+
       socket.off('whiteboardUpdate', handleWhiteboardUpdate);
       socket.off('teacherOnline', handleTeacherOnline);
       socket.off('teacherOffline', handleTeacherOffline);
       socket.off('connect');
       socket.off('disconnect');
-      
+
       if (currentTeacherId) {
         socket.emit('leaveTeacherRoom', currentTeacherId);
       }
     };
   }, [isRecording, currentTeacherId, handleStopRecording]);
-
-  const handleStartRecording = () => {
-    if (!isTeacherLive) {
-      alert('Cannot start recording when teacher is not live');
-      return;
-    }
-    setIsRecording(true);
-    setRecordingStartTime(new Date());
-    setWhiteboardHistory([currentPaths]);
-  };
 
   if (!isTeacherLive) {
     return (
@@ -170,8 +191,8 @@ const StudentWhiteboard: React.FC = () => {
         <button
           onClick={isRecording ? handleStopRecording : handleStartRecording}
           className={`flex items-center gap-2 px-4 py-2 rounded-md ${
-            isRecording 
-              ? 'bg-red-500 hover:bg-red-600' 
+            isRecording
+              ? 'bg-red-500 hover:bg-red-600'
               : 'bg-green-500 hover:bg-green-600'
           } text-white w-full sm:w-auto justify-center`}
         >
