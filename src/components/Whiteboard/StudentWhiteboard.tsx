@@ -1,5 +1,6 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { ReactSketchCanvas, ReactSketchCanvasRef } from 'react-sketch-canvas';
+import { Video, Square } from 'lucide-react';
 import { io, Socket } from 'socket.io-client';
 import { RecordRTCPromisesHandler } from 'recordrtc';
 import { uploadSessionRecording } from '../../lib/cloudinary';
@@ -22,8 +23,6 @@ const StudentWhiteboard: React.FC = () => {
   const [canvasSize, setCanvasSize] = useState({ width: 800, height: 600 });
   const [isRecording, setIsRecording] = useState(false);
   const lastUpdateRef = useRef<string>('[]');
-  const recordingAttemptedRef = useRef(false);
-  const teacherStatusTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const handleWhiteboardUpdate = useCallback(async (data: WhiteboardUpdate) => {
     if (!canvasRef.current) return;
@@ -50,7 +49,6 @@ const StudentWhiteboard: React.FC = () => {
       recorderRef.current = null;
     }
     setIsRecording(false);
-    recordingAttemptedRef.current = false;
   }, []);
 
   const handleStopRecording = useCallback(async () => {
@@ -95,10 +93,8 @@ const StudentWhiteboard: React.FC = () => {
     }
   }, [currentTeacherId, cleanupRecording]);
 
-  const startRecording = useCallback(async () => {
-    if (isRecording || !isTeacherLive || recordingAttemptedRef.current) return;
-
-    recordingAttemptedRef.current = true;
+  const handleStartRecording = async () => {
+    if (isRecording || !isTeacherLive) return;
 
     try {
       const container = document.getElementById('student-whiteboard-container');
@@ -137,7 +133,7 @@ const StudentWhiteboard: React.FC = () => {
         alert('Failed to start recording. Please try again.');
       }
     }
-  }, [handleStopRecording, isRecording, isTeacherLive, cleanupRecording]);
+  };
 
   // Handle window resize
   useEffect(() => {
@@ -158,25 +154,9 @@ const StudentWhiteboard: React.FC = () => {
   // Socket event handlers
   useEffect(() => {
     const handleTeacherOnline = (data: TeacherStatus) => {
-      // Clear any existing timeout
-      if (teacherStatusTimeoutRef.current) {
-        clearTimeout(teacherStatusTimeoutRef.current);
-        teacherStatusTimeoutRef.current = null;
-      }
-
-      // Only update state if teacher status has changed
-      if (!isTeacherLive || currentTeacherId !== data.teacherId) {
-        setIsTeacherLive(true);
-        setCurrentTeacherId(data.teacherId);
-        socket.emit('joinTeacherRoom', data.teacherId);
-
-        // Start recording with a delay only if not already recording
-        if (!isRecording && !recordingAttemptedRef.current) {
-          teacherStatusTimeoutRef.current = setTimeout(() => {
-            startRecording();
-          }, 1000);
-        }
-      }
+      setIsTeacherLive(true);
+      setCurrentTeacherId(data.teacherId);
+      socket.emit('joinTeacherRoom', data.teacherId);
     };
 
     const handleTeacherOffline = () => {
@@ -219,9 +199,6 @@ const StudentWhiteboard: React.FC = () => {
       if (currentTeacherId) {
         socket.emit('leaveTeacherRoom', currentTeacherId);
       }
-      if (teacherStatusTimeoutRef.current) {
-        clearTimeout(teacherStatusTimeoutRef.current);
-      }
       cleanupRecording();
     };
   }, [
@@ -229,9 +206,7 @@ const StudentWhiteboard: React.FC = () => {
     handleStopRecording,
     isRecording,
     currentTeacherId,
-    startRecording,
-    cleanupRecording,
-    isTeacherLive
+    cleanupRecording
   ]);
 
   if (!isTeacherLive) {
@@ -252,11 +227,31 @@ const StudentWhiteboard: React.FC = () => {
 
   return (
     <div className="p-4">
-      <div className="mb-4">
-        <h2 className="text-2xl font-bold">Live Whiteboard Session</h2>
-        <p className="text-sm text-gray-600 mt-1">
-          {isRecording ? 'Recording in progress...' : 'Connecting to session...'}
-        </p>
+      <div className="mb-4 flex justify-between items-center">
+        <div>
+          <h2 className="text-2xl font-bold">Live Whiteboard Session</h2>
+          <p className="text-sm text-gray-600 mt-1">
+            {isRecording ? 'Recording in progress...' : 'Session in progress'}
+          </p>
+        </div>
+        <button
+          onClick={isRecording ? handleStopRecording : handleStartRecording}
+          className={`flex items-center gap-2 px-4 py-2 rounded-md ${
+            isRecording
+              ? 'bg-red-500 hover:bg-red-600'
+              : 'bg-green-500 hover:bg-green-600'
+          } text-white transition-colors`}
+        >
+          {isRecording ? (
+            <>
+              <Square size={20} /> Stop Recording
+            </>
+          ) : (
+            <>
+              <Video size={20} /> Start Recording
+            </>
+          )}
+        </button>
       </div>
       <div id="student-whiteboard-container" className="border rounded-lg overflow-hidden bg-white">
         <ReactSketchCanvas
