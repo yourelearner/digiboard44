@@ -1,14 +1,39 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { ReactSketchCanvas } from 'react-sketch-canvas';
 import { Play, X, Eraser } from 'lucide-react';
 import { io } from 'socket.io-client';
 
-const socket = io(import.meta.env.VITE_API_URL);
+const socket = io(import.meta.env.VITE_API_URL, {
+  transports: ['websocket'],
+  reconnection: true,
+  reconnectionAttempts: 5,
+  reconnectionDelay: 1000
+});
 
 const TeacherWhiteboard: React.FC = () => {
   const canvasRef = useRef<any>(null);
   const [isLive, setIsLive] = useState(false);
   const [showModal, setShowModal] = useState(false);
+
+  useEffect(() => {
+    socket.on('connect', () => {
+      console.log('Teacher connected to server');
+    });
+
+    socket.on('disconnect', () => {
+      console.log('Teacher disconnected from server');
+      setIsLive(false);
+    });
+
+    return () => {
+      socket.off('connect');
+      socket.off('disconnect');
+      const userId = localStorage.getItem('userId');
+      if (userId && isLive) {
+        socket.emit('stopLive', userId);
+      }
+    };
+  }, [isLive]);
 
   const handleStartLive = () => {
     setShowModal(true);
@@ -94,6 +119,7 @@ const TeacherWhiteboard: React.FC = () => {
               width="800px"
               height="600px"
               onStroke={handleStroke}
+              onChange={handleStroke}
             />
           </div>
         ) : (

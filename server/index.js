@@ -56,7 +56,8 @@ io.on('connection', (socket) => {
 
   socket.on('whiteboardUpdate', (data) => {
     console.log('Whiteboard update from teacher:', data.teacherId);
-    io.to(`teacher-${data.teacherId}`).emit('whiteboardUpdate', data);
+    // Broadcast to all clients in the room except the sender
+    socket.broadcast.to(`teacher-${data.teacherId}`).emit('whiteboardUpdate', data);
   });
 
   socket.on('disconnect', () => {
