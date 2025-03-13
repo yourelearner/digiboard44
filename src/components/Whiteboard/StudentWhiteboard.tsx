@@ -16,14 +16,15 @@ const socket: Socket = io(import.meta.env.VITE_API_URL, {
 const StudentWhiteboard: React.FC = () => {
   const canvasRef = useRef<ReactSketchCanvasRef | null>(null);
   const recorderRef = useRef<RecordRTCPromisesHandler | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
   const [isTeacherLive, setIsTeacherLive] = useState(false);
   const [currentTeacherId, setCurrentTeacherId] = useState<string | null>(null);
   const [canvasSize, setCanvasSize] = useState({ width: 800, height: 600 });
   const [isRecording, setIsRecording] = useState(false);
   const lastUpdateRef = useRef<string>('[]');
+  const recordingAttemptedRef = useRef(false);
 
   const handleWhiteboardUpdate = useCallback(async (data: WhiteboardUpdate) => {
-    console.log('Received whiteboard update:', data);
     if (!canvasRef.current) return;
 
     try {
@@ -40,6 +41,18 @@ const StudentWhiteboard: React.FC = () => {
     }
   }, []);
 
+  const cleanupRecording = useCallback(() => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop());
+      streamRef.current = null;
+    }
+    if (recorderRef.current) {
+      recorderRef.current = null;
+    }
+    setIsRecording(false);
+    recordingAttemptedRef.current = false;
+  }, []);
+
   const handleStopRecording = useCallback(async () => {
     if (!recorderRef.current || !currentTeacherId) return;
 
@@ -47,6 +60,10 @@ const StudentWhiteboard: React.FC = () => {
       console.log('Stopping recording...');
       await recorderRef.current.stopRecording();
       const blob = await recorderRef.current.getBlob();
+
+      if (!blob || blob.size === 0) {
+        throw new Error('Empty recording blob');
+      }
 
       const videoBlob = new Blob([blob], { type: 'video/webm' });
 
@@ -72,28 +89,22 @@ const StudentWhiteboard: React.FC = () => {
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        console.error('Backend error:', errorData);
         throw new Error('Failed to save session');
       }
 
-      if (recorderRef.current) {
-        const tracks = recorderRef.current.getState().stream.getTracks();
-        tracks.forEach(track => track.stop());
-      }
-      recorderRef.current = null;
-      setIsRecording(false);
-
+      cleanupRecording();
       alert('Session recorded and saved successfully!');
     } catch (error) {
       console.error('Error saving recording:', error);
+      cleanupRecording();
       alert('Failed to save recording. Please try again.');
-      setIsRecording(false);
     }
-  }, [currentTeacherId]);
+  }, [currentTeacherId, cleanupRecording]);
 
   const startRecording = useCallback(async () => {
-    if (isRecording || !isTeacherLive) return;
+    if (isRecording || !isTeacherLive || recordingAttemptedRef.current) return;
+
+    recordingAttemptedRef.current = true;
 
     try {
       console.log('Starting recording...');
@@ -110,36 +121,35 @@ const StudentWhiteboard: React.FC = () => {
         }
       });
 
+      streamRef.current = stream;
       recorderRef.current = new RecordRTCPromisesHandler(stream, {
         type: 'video',
         mimeType: 'video/webm',
         disableLogs: false,
-        timeSlice: 1000 // Record in 1-second chunks
+        timeSlice: 1000
       });
 
       await recorderRef.current.startRecording();
       setIsRecording(true);
       console.log('Recording started successfully');
 
-      // Handle stream end
       stream.getVideoTracks()[0].onended = () => {
         handleStopRecording();
       };
     } catch (error) {
       console.error('Error starting recording:', error);
-      alert('Failed to start recording. Please try again.');
+      cleanupRecording();
+      if (error instanceof Error && error.name === 'NotAllowedError') {
+        alert('Please allow screen recording to continue with the session.');
+      } else {
+        alert('Failed to start recording. Please try again.');
+      }
     }
-  }, [handleStopRecording, isRecording, isTeacherLive]);
+  }, [handleStopRecording, isRecording, isTeacherLive, cleanupRecording]);
 
   // Check for active teacher on mount
   useEffect(() => {
-    const checkTeacherStatus = () => {
-      // Emit a status check event
-      socket.emit('checkTeacherStatus');
-    };
-
-    // Check status when component mounts
-    checkTeacherStatus();
+    socket.emit('checkTeacherStatus');
   }, []);
 
   // Handle window resize
@@ -166,8 +176,10 @@ const StudentWhiteboard: React.FC = () => {
       setCurrentTeacherId(data.teacherId);
       socket.emit('joinTeacherRoom', data.teacherId);
 
-      // Start recording automatically when teacher goes live
-      await startRecording();
+      // Start recording with a slight delay to ensure UI is ready
+      setTimeout(() => {
+        startRecording();
+      }, 1000);
     };
 
     const handleTeacherOffline = () => {
@@ -214,8 +226,16 @@ const StudentWhiteboard: React.FC = () => {
       if (currentTeacherId) {
         socket.emit('leaveTeacherRoom', currentTeacherId);
       }
+      cleanupRecording();
     };
-  }, [handleWhiteboardUpdate, handleStopRecording, isRecording, currentTeacherId, startRecording]);
+  }, [
+    handleWhiteboardUpdate,
+    handleStopRecording,
+    isRecording,
+    currentTeacherId,
+    startRecording,
+    cleanupRecording
+  ]);
 
   if (!isTeacherLive) {
     return (
