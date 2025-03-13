@@ -1,4 +1,4 @@
-import React, { useRef, useState, useEffect, useCallback } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { ReactSketchCanvas } from 'react-sketch-canvas';
 import { Video, Square } from 'lucide-react';
 import { io, Socket } from 'socket.io-client';
@@ -51,31 +51,34 @@ const StudentWhiteboard: React.FC = () => {
 
       recorderRef.current = new RecordRTCPromisesHandler(stream, {
         type: 'video',
-        mimeType: 'video/webm;codecs=vp8',
+        mimeType: 'video/webm;codecs=vp9',
         bitsPerSecond: 128000
       });
 
       await recorderRef.current.startRecording();
       setIsRecording(true);
+
+      // Stop recording when stream ends (user clicks stop sharing)
+      stream.getVideoTracks()[0].onended = () => {
+        handleStopRecording();
+      };
     } catch (error) {
       console.error('Error starting recording:', error);
       alert('Failed to start recording. Please try again.');
     }
   };
 
-  const handleStopRecording = useCallback(async () => {
-    if (!isRecording || !recorderRef.current || !currentTeacherId) return;
+  const handleStopRecording = async () => {
+    if (!recorderRef.current || !isRecording) return;
 
     try {
       await recorderRef.current.stopRecording();
       const blob = await recorderRef.current.getBlob();
 
-      // Stop all tracks
-      const tracks = recorderRef.current.getInternalRecorder().stream.getTracks();
-      tracks.forEach(track => track.stop());
-
+      // Upload to Cloudinary
       const videoUrl = await uploadSessionRecording(blob);
 
+      // Save session
       const response = await fetch(`${import.meta.env.VITE_API_URL}/api/sessions`, {
         method: 'POST',
         headers: {
@@ -93,15 +96,19 @@ const StudentWhiteboard: React.FC = () => {
         throw new Error('Failed to save session');
       }
 
+      // Cleanup
+      const tracks = recorderRef.current.getState().stream.getTracks();
+      tracks.forEach(track => track.stop());
+      recorderRef.current = null;
+      setIsRecording(false);
+
       alert('Recording saved successfully!');
     } catch (error) {
-      console.error('Error stopping recording:', error);
+      console.error('Error saving recording:', error);
       alert('Failed to save recording. Please try again.');
-    } finally {
       setIsRecording(false);
-      recorderRef.current = null;
     }
-  }, [isRecording, currentTeacherId]);
+  };
 
   useEffect(() => {
     const handleWhiteboardUpdate = async (data: WhiteboardUpdate) => {
@@ -155,7 +162,7 @@ const StudentWhiteboard: React.FC = () => {
         socket.emit('leaveTeacherRoom', currentTeacherId);
       }
     };
-  }, [isRecording, handleStopRecording, currentTeacherId]);
+  }, [isRecording, currentTeacherId]);
 
   if (!isTeacherLive) {
     return (
@@ -183,7 +190,7 @@ const StudentWhiteboard: React.FC = () => {
             isRecording
               ? 'bg-red-500 hover:bg-red-600'
               : 'bg-green-500 hover:bg-green-600'
-          } text-white`}
+          } text-white w-full sm:w-auto justify-center`}
         >
           {isRecording ? (
             <>
