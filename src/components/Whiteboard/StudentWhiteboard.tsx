@@ -1,4 +1,5 @@
 import React, { useRef, useState, useEffect } from 'react';
+import { ReactSketchCanvas } from 'react-sketch-canvas';
 import { Video, Square } from 'lucide-react';
 import { io } from 'socket.io-client';
 import { uploadSessionRecording } from '../../lib/cloudinary';
@@ -6,15 +7,18 @@ import { uploadSessionRecording } from '../../lib/cloudinary';
 const socket = io(import.meta.env.VITE_API_URL);
 
 const StudentWhiteboard: React.FC = () => {
-  const whiteboardRef = useRef<any>(null);
+  const canvasRef = useRef<any>(null);
   const [isRecording, setIsRecording] = useState(false);
   const [recordingStartTime, setRecordingStartTime] = useState<Date | null>(null);
   const [whiteboardHistory, setWhiteboardHistory] = useState<string[]>([]);
 
   useEffect(() => {
-    socket.on('whiteboardUpdate', (data) => {
-      if (whiteboardRef.current) {
-        whiteboardRef.current.loadSaveData(data.whiteboardData);
+    socket.on('whiteboardUpdate', async (data) => {
+      if (canvasRef.current) {
+        await canvasRef.current.clearCanvas();
+        if (data.whiteboardData && data.whiteboardData !== '[]') {
+          await canvasRef.current.loadPaths(JSON.parse(data.whiteboardData));
+        }
         if (isRecording) {
           setWhiteboardHistory(prev => [...prev, data.whiteboardData]);
         }
@@ -53,7 +57,6 @@ const StudentWhiteboard: React.FC = () => {
         },
         body: JSON.stringify({
           teacherId: localStorage.getItem('currentTeacherId'),
-          studentId: localStorage.getItem('userId'),
           videoUrl,
           whiteboardData: JSON.stringify(whiteboardHistory)
         })
@@ -89,13 +92,14 @@ const StudentWhiteboard: React.FC = () => {
           )}
         </button>
       </div>
-      <div className="border rounded-lg overflow-hidden">
-        <CanvasDraw
-          ref={whiteboardRef}
-          disabled
-          canvasWidth={800}
-          canvasHeight={600}
-          className="bg-white"
+      <div className="border rounded-lg overflow-hidden bg-white">
+        <ReactSketchCanvas
+          ref={canvasRef}
+          strokeWidth={4}
+          strokeColor="black"
+          width="800px"
+          height="600px"
+          readOnly
         />
       </div>
     </div>
