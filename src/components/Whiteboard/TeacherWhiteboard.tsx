@@ -17,6 +17,9 @@ const TeacherWhiteboard: React.FC = () => {
   const handleStopLive = () => {
     setIsLive(false);
     socket.emit('stopLive', localStorage.getItem('userId'));
+    if (canvasRef.current) {
+      canvasRef.current.clearCanvas();
+    }
   };
 
   const handleStroke = async () => {
@@ -31,14 +34,12 @@ const TeacherWhiteboard: React.FC = () => {
   };
 
   const handleClearCanvas = async () => {
-    if (canvasRef.current) {
+    if (canvasRef.current && isLive) {
       await canvasRef.current.clearCanvas();
-      if (isLive) {
-        socket.emit('whiteboardUpdate', {
-          teacherId: localStorage.getItem('userId'),
-          whiteboardData: JSON.stringify([])
-        });
-      }
+      socket.emit('whiteboardUpdate', {
+        teacherId: localStorage.getItem('userId'),
+        whiteboardData: JSON.stringify([])
+      });
     }
   };
 
@@ -47,12 +48,14 @@ const TeacherWhiteboard: React.FC = () => {
       <div className="mb-4 flex justify-between items-center">
         <h2 className="text-2xl font-bold">Whiteboard</h2>
         <div className="flex gap-2">
-          <button
-            onClick={handleClearCanvas}
-            className="flex items-center gap-2 px-4 py-2 rounded-md bg-yellow-500 hover:bg-yellow-600 text-white"
-          >
-            <Eraser size={20} /> Clear Board
-          </button>
+          {isLive && (
+            <button
+              onClick={handleClearCanvas}
+              className="flex items-center gap-2 px-4 py-2 rounded-md bg-yellow-500 hover:bg-yellow-600 text-white"
+            >
+              <Eraser size={20} /> Clear Board
+            </button>
+          )}
           <button
             onClick={isLive ? handleStopLive : handleStartLive}
             className={`flex items-center gap-2 px-4 py-2 rounded-md ${
@@ -73,16 +76,25 @@ const TeacherWhiteboard: React.FC = () => {
           </button>
         </div>
       </div>
-      <div className="border rounded-lg overflow-hidden bg-white">
-        <ReactSketchCanvas
-          ref={canvasRef}
-          strokeWidth={4}
-          strokeColor="black"
-          width="800px"
-          height="600px"
-          onStroke={handleStroke}
-        />
-      </div>
+      {isLive ? (
+        <div className="border rounded-lg overflow-hidden bg-white">
+          <ReactSketchCanvas
+            ref={canvasRef}
+            strokeWidth={4}
+            strokeColor="black"
+            width="800px"
+            height="600px"
+            onStroke={handleStroke}
+          />
+        </div>
+      ) : (
+        <div className="border rounded-lg overflow-hidden bg-white p-8 flex items-center justify-center min-h-[600px]">
+          <div className="text-center text-gray-500">
+            <p className="text-xl font-semibold mb-2">Whiteboard is not live</p>
+            <p>Click "Start Live" to begin the session</p>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

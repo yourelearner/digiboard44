@@ -11,6 +11,7 @@ const StudentWhiteboard: React.FC = () => {
   const [isRecording, setIsRecording] = useState(false);
   const [recordingStartTime, setRecordingStartTime] = useState<Date | null>(null);
   const [whiteboardHistory, setWhiteboardHistory] = useState<string[]>([]);
+  const [isTeacherLive, setIsTeacherLive] = useState(false);
 
   useEffect(() => {
     socket.on('whiteboardUpdate', async (data) => {
@@ -22,15 +23,28 @@ const StudentWhiteboard: React.FC = () => {
         if (isRecording) {
           setWhiteboardHistory(prev => [...prev, data.whiteboardData]);
         }
+        setIsTeacherLive(true);
+      }
+    });
+
+    socket.on('teacherOffline', () => {
+      setIsTeacherLive(false);
+      if (canvasRef.current) {
+        canvasRef.current.clearCanvas();
       }
     });
 
     return () => {
       socket.off('whiteboardUpdate');
+      socket.off('teacherOffline');
     };
   }, [isRecording]);
 
   const handleStartRecording = () => {
+    if (!isTeacherLive) {
+      alert('Cannot start recording when teacher is not live');
+      return;
+    }
     setIsRecording(true);
     setRecordingStartTime(new Date());
     setWhiteboardHistory([]);
@@ -69,6 +83,22 @@ const StudentWhiteboard: React.FC = () => {
     }
   };
 
+  if (!isTeacherLive) {
+    return (
+      <div className="p-4">
+        <div className="mb-4 flex justify-between items-center">
+          <h2 className="text-2xl font-bold">Live Whiteboard</h2>
+        </div>
+        <div className="border rounded-lg overflow-hidden bg-white p-8 flex items-center justify-center min-h-[600px]">
+          <div className="text-center text-gray-500">
+            <p className="text-xl font-semibold mb-2">Teacher is not live</p>
+            <p>Please wait for the teacher to start the session</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="p-4">
       <div className="mb-4 flex justify-between items-center">
@@ -99,7 +129,7 @@ const StudentWhiteboard: React.FC = () => {
           strokeColor="black"
           width="800px"
           height="600px"
-          readOnly
+          readOnly={true}
         />
       </div>
     </div>

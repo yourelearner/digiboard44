@@ -36,6 +36,11 @@ io.on('connection', (socket) => {
     socket.join(`teacher-${teacherId}`);
   });
 
+  socket.on('stopLive', (teacherId) => {
+    socket.to(`teacher-${teacherId}`).emit('teacherOffline');
+    socket.leave(`teacher-${teacherId}`);
+  });
+
   socket.on('whiteboardUpdate', (data) => {
     socket.to(`teacher-${data.teacherId}`).emit('whiteboardUpdate', data);
   });
