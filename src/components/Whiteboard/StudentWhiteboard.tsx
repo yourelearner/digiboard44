@@ -20,14 +20,14 @@ const StudentWhiteboard: React.FC = () => {
   const [isTeacherLive, setIsTeacherLive] = useState(false);
   const [currentTeacherId, setCurrentTeacherId] = useState<string | null>(null);
   const [canvasSize, setCanvasSize] = useState({ width: 800, height: 600 });
-  const recordingInterval = useRef<number | null>(null);
+  const lastUpdateRef = useRef<string | null>(null);
 
   useEffect(() => {
     const handleResize = () => {
       const container = document.getElementById('student-whiteboard-container');
       if (container) {
         const width = container.clientWidth;
-        const height = Math.min(window.innerHeight - 200, width * 0.75); // 4:3 aspect ratio
+        const height = Math.min(window.innerHeight - 200, width * 0.75);
         setCanvasSize({ width, height });
       }
     };
@@ -36,13 +36,6 @@ const StudentWhiteboard: React.FC = () => {
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
-
-  const captureFrame = async () => {
-    if (canvasRef.current) {
-      const paths = await canvasRef.current.exportPaths();
-      setWhiteboardHistory(prev => [...prev, JSON.stringify(paths)]);
-    }
-  };
 
   const handleStartRecording = async () => {
     if (!isTeacherLive) {
@@ -54,28 +47,18 @@ const StudentWhiteboard: React.FC = () => {
     setRecordingStartTime(new Date());
     setWhiteboardHistory([]);
 
-    // Capture initial frame
-    await captureFrame();
-
-    // Start capturing frames at regular intervals
-    recordingInterval.current = window.setInterval(captureFrame, 100); // Capture every 100ms
+    // Capture initial state if available
+    if (lastUpdateRef.current) {
+      setWhiteboardHistory([lastUpdateRef.current]);
+    }
   };
 
   const handleStopRecording = useCallback(async () => {
     if (!isRecording || !recordingStartTime || !currentTeacherId) return;
 
-    // Clear the recording interval
-    if (recordingInterval.current) {
-      clearInterval(recordingInterval.current);
-      recordingInterval.current = null;
-    }
-
     setIsRecording(false);
 
     try {
-      // Capture final frame
-      await captureFrame();
-
       const recordingData = {
         history: whiteboardHistory,
         startTime: recordingStartTime,
@@ -116,6 +99,14 @@ const StudentWhiteboard: React.FC = () => {
         if (data.whiteboardData && data.whiteboardData !== '[]') {
           const paths = JSON.parse(data.whiteboardData);
           await canvasRef.current.loadPaths(paths);
+
+          // Store the latest update
+          lastUpdateRef.current = data.whiteboardData;
+
+          // If recording, add to history
+          if (isRecording) {
+            setWhiteboardHistory(prev => [...prev, data.whiteboardData]);
+          }
         }
       }
     };
@@ -135,6 +126,7 @@ const StudentWhiteboard: React.FC = () => {
       if (isRecording) {
         handleStopRecording();
       }
+      lastUpdateRef.current = null;
     };
 
     socket.on('connect', () => {});
@@ -144,6 +136,7 @@ const StudentWhiteboard: React.FC = () => {
       if (isRecording) {
         handleStopRecording();
       }
+      lastUpdateRef.current = null;
     });
 
     socket.on('whiteboardUpdate', handleWhiteboardUpdate);
@@ -151,11 +144,6 @@ const StudentWhiteboard: React.FC = () => {
     socket.on('teacherOffline', handleTeacherOffline);
 
     return () => {
-      // Clean up recording interval
-      if (recordingInterval.current) {
-        clearInterval(recordingInterval.current);
-      }
-
       socket.off('whiteboardUpdate', handleWhiteboardUpdate);
       socket.off('teacherOnline', handleTeacherOnline);
       socket.off('teacherOffline', handleTeacherOffline);
