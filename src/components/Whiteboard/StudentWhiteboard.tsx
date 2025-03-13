@@ -4,7 +4,12 @@ import { Video, Square } from 'lucide-react';
 import { io } from 'socket.io-client';
 import { uploadSessionRecording } from '../../lib/cloudinary';
 
-const socket = io(import.meta.env.VITE_API_URL);
+const socket = io(import.meta.env.VITE_API_URL, {
+  transports: ['websocket'],
+  reconnection: true,
+  reconnectionAttempts: 5,
+  reconnectionDelay: 1000
+});
 
 const StudentWhiteboard: React.FC = () => {
   const canvasRef = useRef<any>(null);
@@ -14,13 +19,12 @@ const StudentWhiteboard: React.FC = () => {
   const [isTeacherLive, setIsTeacherLive] = useState(false);
 
   useEffect(() => {
-    // Join the teacher's room when component mounts
-    const teacherId = localStorage.getItem('currentTeacherId');
+    const teacherId = localStorage.getItem('userId');
     if (teacherId) {
       socket.emit('joinTeacherRoom', teacherId);
     }
 
-    socket.on('whiteboardUpdate', async (data) => {
+    const handleWhiteboardUpdate = async (data: any) => {
       if (canvasRef.current) {
         await canvasRef.current.clearCanvas();
         if (data.whiteboardData && data.whiteboardData !== '[]') {
@@ -29,25 +33,39 @@ const StudentWhiteboard: React.FC = () => {
         if (isRecording) {
           setWhiteboardHistory(prev => [...prev, data.whiteboardData]);
         }
-        setIsTeacherLive(true);
       }
-    });
+    };
 
-    socket.on('teacherOnline', () => {
+    const handleTeacherOnline = () => {
+      console.log('Teacher is online');
       setIsTeacherLive(true);
-    });
+    };
 
-    socket.on('teacherOffline', () => {
+    const handleTeacherOffline = () => {
+      console.log('Teacher went offline');
       setIsTeacherLive(false);
       if (canvasRef.current) {
         canvasRef.current.clearCanvas();
       }
+    };
+
+    socket.on('connect', () => {
+      console.log('Connected to server');
     });
 
+    socket.on('disconnect', () => {
+      console.log('Disconnected from server');
+      setIsTeacherLive(false);
+    });
+
+    socket.on('whiteboardUpdate', handleWhiteboardUpdate);
+    socket.on('teacherOnline', handleTeacherOnline);
+    socket.on('teacherOffline', handleTeacherOffline);
+
     return () => {
-      socket.off('whiteboardUpdate');
-      socket.off('teacherOnline');
-      socket.off('teacherOffline');
+      socket.off('whiteboardUpdate', handleWhiteboardUpdate);
+      socket.off('teacherOnline', handleTeacherOnline);
+      socket.off('teacherOffline', handleTeacherOffline);
       if (teacherId) {
         socket.emit('leaveTeacherRoom', teacherId);
       }

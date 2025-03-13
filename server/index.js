@@ -33,25 +33,30 @@ io.on('connection', (socket) => {
   console.log('A user connected');
 
   socket.on('startLive', (teacherId) => {
+    console.log('Teacher started live session:', teacherId);
     socket.join(`teacher-${teacherId}`);
-    io.to(`teacher-${teacherId}`).emit('teacherOnline');
+    io.emit('teacherOnline', { teacherId });
   });
 
   socket.on('stopLive', (teacherId) => {
-    io.to(`teacher-${teacherId}`).emit('teacherOffline');
+    console.log('Teacher stopped live session:', teacherId);
+    io.emit('teacherOffline', { teacherId });
     socket.leave(`teacher-${teacherId}`);
   });
 
   socket.on('joinTeacherRoom', (teacherId) => {
+    console.log('Student joined teacher room:', teacherId);
     socket.join(`teacher-${teacherId}`);
   });
 
   socket.on('leaveTeacherRoom', (teacherId) => {
+    console.log('Student left teacher room:', teacherId);
     socket.leave(`teacher-${teacherId}`);
   });
 
   socket.on('whiteboardUpdate', (data) => {
-    socket.to(`teacher-${data.teacherId}`).emit('whiteboardUpdate', data);
+    console.log('Whiteboard update from teacher:', data.teacherId);
+    io.to(`teacher-${data.teacherId}`).emit('whiteboardUpdate', data);
   });
 
   socket.on('disconnect', () => {
