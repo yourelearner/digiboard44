@@ -6,6 +6,7 @@ import { RecordRTCPromisesHandler } from 'recordrtc';
 import { uploadSessionRecording } from '../../lib/cloudinary';
 import { WhiteboardUpdate, TeacherStatus } from '../../types/socket';
 
+// Create socket connection outside component to maintain a single instance
 const socket: Socket = io(import.meta.env.VITE_API_URL, {
   transports: ['websocket'],
   reconnection: true,
@@ -37,7 +38,7 @@ const StudentWhiteboard: React.FC = () => {
   }, []);
 
   const handleStopRecording = useCallback(async () => {
-    if (!recorderRef.current || !isRecording || !currentTeacherId) return;
+    if (!recorderRef.current || !currentTeacherId) return;
 
     try {
       await recorderRef.current.stopRecording();
@@ -84,7 +85,7 @@ const StudentWhiteboard: React.FC = () => {
       alert('Failed to save recording. Please try again.');
       setIsRecording(false);
     }
-  }, [isRecording, currentTeacherId]);
+  }, [currentTeacherId]);
 
   const handleStartRecording = async () => {
     if (!isTeacherLive) {
@@ -109,7 +110,8 @@ const StudentWhiteboard: React.FC = () => {
       recorderRef.current = new RecordRTCPromisesHandler(stream, {
         type: 'video',
         mimeType: 'video/webm',
-        disableLogs: false
+        disableLogs: false,
+        timeSlice: 1000 // Record in 1-second chunks
       });
 
       await recorderRef.current.startRecording();
@@ -124,6 +126,7 @@ const StudentWhiteboard: React.FC = () => {
     }
   };
 
+  // Handle window resize
   useEffect(() => {
     const handleResize = () => {
       const container = document.getElementById('student-whiteboard-container');
@@ -139,16 +142,16 @@ const StudentWhiteboard: React.FC = () => {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
+  // Socket event handlers
   useEffect(() => {
-    socket.on('whiteboardUpdate', handleWhiteboardUpdate);
-    socket.on('teacherOnline', (data: TeacherStatus) => {
+    const handleTeacherOnline = (data: TeacherStatus) => {
       console.log('Teacher online:', data);
       setIsTeacherLive(true);
       setCurrentTeacherId(data.teacherId);
       socket.emit('joinTeacherRoom', data.teacherId);
-    });
+    };
 
-    socket.on('teacherOffline', () => {
+    const handleTeacherOffline = () => {
       console.log('Teacher offline');
       setIsTeacherLive(false);
       setCurrentTeacherId(null);
@@ -158,33 +161,42 @@ const StudentWhiteboard: React.FC = () => {
       if (isRecording) {
         handleStopRecording();
       }
-    });
+    };
 
-    socket.on('connect', () => {
+    const handleConnect = () => {
       console.log('Connected to server');
-    });
+      if (currentTeacherId) {
+        socket.emit('joinTeacherRoom', currentTeacherId);
+      }
+    };
 
-    socket.on('disconnect', () => {
+    const handleDisconnect = () => {
       console.log('Disconnected from server');
-      setIsTeacherLive(false);
-      setCurrentTeacherId(null);
       if (isRecording) {
         handleStopRecording();
       }
-    });
+    };
 
+    // Register event handlers
+    socket.on('whiteboardUpdate', handleWhiteboardUpdate);
+    socket.on('teacherOnline', handleTeacherOnline);
+    socket.on('teacherOffline', handleTeacherOffline);
+    socket.on('connect', handleConnect);
+    socket.on('disconnect', handleDisconnect);
+
+    // Cleanup
     return () => {
-      socket.off('whiteboardUpdate');
-      socket.off('teacherOnline');
-      socket.off('teacherOffline');
-      socket.off('connect');
-      socket.off('disconnect');
+      socket.off('whiteboardUpdate', handleWhiteboardUpdate);
+      socket.off('teacherOnline', handleTeacherOnline);
+      socket.off('teacherOffline', handleTeacherOffline);
+      socket.off('connect', handleConnect);
+      socket.off('disconnect', handleDisconnect);
 
       if (currentTeacherId) {
         socket.emit('leaveTeacherRoom', currentTeacherId);
       }
     };
-  }, [handleStopRecording, handleWhiteboardUpdate, isRecording, currentTeacherId]);
+  }, [handleWhiteboardUpdate, handleStopRecording, isRecording, currentTeacherId]);
 
   if (!isTeacherLive) {
     return (
