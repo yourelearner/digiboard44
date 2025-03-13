@@ -14,6 +14,12 @@ const StudentWhiteboard: React.FC = () => {
   const [isTeacherLive, setIsTeacherLive] = useState(false);
 
   useEffect(() => {
+    // Join the teacher's room when component mounts
+    const teacherId = localStorage.getItem('currentTeacherId');
+    if (teacherId) {
+      socket.emit('joinTeacherRoom', teacherId);
+    }
+
     socket.on('whiteboardUpdate', async (data) => {
       if (canvasRef.current) {
         await canvasRef.current.clearCanvas();
@@ -27,6 +33,10 @@ const StudentWhiteboard: React.FC = () => {
       }
     });
 
+    socket.on('teacherOnline', () => {
+      setIsTeacherLive(true);
+    });
+
     socket.on('teacherOffline', () => {
       setIsTeacherLive(false);
       if (canvasRef.current) {
@@ -36,7 +46,11 @@ const StudentWhiteboard: React.FC = () => {
 
     return () => {
       socket.off('whiteboardUpdate');
+      socket.off('teacherOnline');
       socket.off('teacherOffline');
+      if (teacherId) {
+        socket.emit('leaveTeacherRoom', teacherId);
+      }
     };
   }, [isRecording]);
 
@@ -106,8 +120,8 @@ const StudentWhiteboard: React.FC = () => {
         <button
           onClick={isRecording ? handleStopRecording : handleStartRecording}
           className={`flex items-center gap-2 px-4 py-2 rounded-md ${
-            isRecording 
-              ? 'bg-red-500 hover:bg-red-600' 
+            isRecording
+              ? 'bg-red-500 hover:bg-red-600'
               : 'bg-green-500 hover:bg-green-600'
           } text-white`}
         >

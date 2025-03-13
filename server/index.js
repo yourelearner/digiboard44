@@ -34,10 +34,19 @@ io.on('connection', (socket) => {
 
   socket.on('startLive', (teacherId) => {
     socket.join(`teacher-${teacherId}`);
+    io.to(`teacher-${teacherId}`).emit('teacherOnline');
   });
 
   socket.on('stopLive', (teacherId) => {
-    socket.to(`teacher-${teacherId}`).emit('teacherOffline');
+    io.to(`teacher-${teacherId}`).emit('teacherOffline');
+    socket.leave(`teacher-${teacherId}`);
+  });
+
+  socket.on('joinTeacherRoom', (teacherId) => {
+    socket.join(`teacher-${teacherId}`);
+  });
+
+  socket.on('leaveTeacherRoom', (teacherId) => {
     socket.leave(`teacher-${teacherId}`);
   });
 
