@@ -29,7 +29,7 @@ const StudentWhiteboard: React.FC = () => {
     try {
       // Store the latest update
       lastUpdateRef.current = data.whiteboardData;
-      
+
       await canvasRef.current.clearCanvas();
       if (data.whiteboardData && data.whiteboardData !== '[]') {
         const paths = JSON.parse(data.whiteboardData);
@@ -46,9 +46,9 @@ const StudentWhiteboard: React.FC = () => {
     try {
       await recorderRef.current.stopRecording();
       const blob = await recorderRef.current.getBlob();
-      
+
       const videoBlob = new Blob([blob], { type: 'video/webm' });
-      
+
       console.log('Uploading recording to Cloudinary...');
       const videoUrl = await uploadSessionRecording(videoBlob);
       console.log('Upload successful, video URL:', videoUrl);
@@ -80,7 +80,7 @@ const StudentWhiteboard: React.FC = () => {
       tracks.forEach(track => track.stop());
       recorderRef.current = null;
       setIsRecording(false);
-      
+
       alert('Session recorded and saved successfully!');
     } catch (error) {
       console.error('Error saving recording:', error);
@@ -89,7 +89,7 @@ const StudentWhiteboard: React.FC = () => {
     }
   }, [currentTeacherId]);
 
-  const startRecording = async () => {
+  const startRecording = useCallback(async () => {
     try {
       const container = document.getElementById('student-whiteboard-container');
       if (!container) {
@@ -122,7 +122,7 @@ const StudentWhiteboard: React.FC = () => {
       console.error('Error starting recording:', error);
       alert('Failed to start recording. Please try again.');
     }
-  };
+  }, [handleStopRecording]);
 
   // Handle window resize
   useEffect(() => {
@@ -147,7 +147,7 @@ const StudentWhiteboard: React.FC = () => {
       setIsTeacherLive(true);
       setCurrentTeacherId(data.teacherId);
       socket.emit('joinTeacherRoom', data.teacherId);
-      
+
       // Start recording automatically when teacher goes live
       await startRecording();
     };
@@ -192,12 +192,12 @@ const StudentWhiteboard: React.FC = () => {
       socket.off('teacherOffline', handleTeacherOffline);
       socket.off('connect', handleConnect);
       socket.off('disconnect', handleDisconnect);
-      
+
       if (currentTeacherId) {
         socket.emit('leaveTeacherRoom', currentTeacherId);
       }
     };
-  }, [handleWhiteboardUpdate, handleStopRecording, isRecording, currentTeacherId]);
+  }, [handleWhiteboardUpdate, handleStopRecording, isRecording, currentTeacherId, startRecording]);
 
   if (!isTeacherLive) {
     return (
