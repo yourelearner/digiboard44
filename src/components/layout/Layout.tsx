@@ -51,7 +51,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-100 flex">
+    <div className="min-h-screen h-screen bg-gray-100 flex overflow-hidden">
       {/* Mobile Sidebar Overlay */}
       {isSidebarOpen && (
         <div
@@ -62,11 +62,11 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
 
       {/* Sidebar */}
       <div
-        className={`fixed lg:static w-64 bg-white shadow-lg z-50 h-full transform transition-transform duration-300 ease-in-out ${
+        className={`fixed lg:relative w-64 bg-white shadow-lg z-50 h-full transform transition-transform duration-300 ease-in-out ${
           isSidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
         }`}
       >
-        <div className="h-full flex flex-col">
+        <div className="flex flex-col h-full">
           <div className="p-4 flex items-center justify-between">
             <h1 className="text-2xl font-bold text-indigo-600">DigiBoard</h1>
             <button
@@ -76,7 +76,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
               <Menu size={24} />
             </button>
           </div>
-          <nav className="flex-1 p-4">
+          <nav className="flex-1 p-4 overflow-y-auto">
             <ul className="space-y-2">
               {menuItems.map((item) => {
                 const Icon = item.icon;
@@ -114,7 +114,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
       </div>
 
       {/* Main Content */}
-      <main className="flex-1 relative">
+      <main className="flex-1 flex flex-col h-full overflow-hidden">
         {/* Mobile Header */}
         <div className="lg:hidden bg-white shadow-sm p-4 flex items-center justify-between">
           <h1 className="text-xl font-bold text-indigo-600">DigiBoard</h1>
@@ -125,7 +125,9 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
             <Menu size={24} />
           </button>
         </div>
-        {children}
+        <div className="flex-1 overflow-y-auto">
+          {children}
+        </div>
       </main>
     </div>
   );
