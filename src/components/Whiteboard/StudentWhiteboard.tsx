@@ -19,7 +19,6 @@ const StudentWhiteboard: React.FC = () => {
   const [whiteboardHistory, setWhiteboardHistory] = useState<string[]>([]);
   const [isTeacherLive, setIsTeacherLive] = useState(false);
   const [currentTeacherId, setCurrentTeacherId] = useState<string | null>(null);
-  const [currentPaths, setCurrentPaths] = useState<string>('[]');
   const recordingInterval = useRef<number | null>(null);
 
   const handleStopRecording = useCallback(async () => {
@@ -73,7 +72,10 @@ const StudentWhiteboard: React.FC = () => {
         if (data.whiteboardData && data.whiteboardData !== '[]') {
           const paths = JSON.parse(data.whiteboardData);
           await canvasRef.current.loadPaths(paths);
-          setCurrentPaths(data.whiteboardData);
+
+          if (isRecording) {
+            setWhiteboardHistory(prev => [...prev, data.whiteboardData]);
+          }
         }
       }
     };
@@ -132,15 +134,7 @@ const StudentWhiteboard: React.FC = () => {
     }
     setIsRecording(true);
     setRecordingStartTime(new Date());
-    setWhiteboardHistory([currentPaths]);
-
-    // Capture frames at regular intervals
-    recordingInterval.current = window.setInterval(async () => {
-      if (canvasRef.current) {
-        const paths = await canvasRef.current.exportPaths();
-        setWhiteboardHistory(prev => [...prev, JSON.stringify(paths)]);
-      }
-    }, 100); // Capture every 100ms
+    setWhiteboardHistory([]);
   };
 
   if (!isTeacherLive) {

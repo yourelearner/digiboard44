@@ -8,9 +8,13 @@ const createVideoFromFrames = async (frames: string[]): Promise<Blob> => {
   canvas.height = 600;
   const ctx = canvas.getContext('2d')!;
 
+  // Add a small delay to ensure the MediaRecorder has time to initialize
+  await new Promise(resolve => setTimeout(resolve, 100));
+
   const stream = canvas.captureStream(30);
   const mediaRecorder = new MediaRecorder(stream, {
-    mimeType: 'video/webm;codecs=vp9'
+    mimeType: 'video/webm;codecs=vp9',
+    videoBitsPerSecond: 8000000 // 8 Mbps for better quality
   });
 
   const chunks: Blob[] = [];
@@ -29,8 +33,10 @@ const createVideoFromFrames = async (frames: string[]): Promise<Blob> => {
     mediaRecorder.start();
 
     let frameIndex = 0;
-    const drawFrame = () => {
+    const drawFrame = async () => {
       if (frameIndex >= frames.length) {
+        // Add a small delay before stopping to ensure last frame is captured
+        await new Promise(resolve => setTimeout(resolve, 100));
         mediaRecorder.stop();
         return;
       }
@@ -51,8 +57,8 @@ const createVideoFromFrames = async (frames: string[]): Promise<Blob> => {
               const points = path.paths[0];
               if (points.length > 0) {
                 ctx.moveTo(points[0].x, points[0].y);
-                points.forEach((point: any, i: number) => {
-                  if (i > 0) ctx.lineTo(point.x, point.y);
+                points.forEach((point: any) => {
+                  ctx.lineTo(point.x, point.y);
                 });
               }
               ctx.stroke();
@@ -63,6 +69,8 @@ const createVideoFromFrames = async (frames: string[]): Promise<Blob> => {
         console.error('Error drawing frame:', error);
       }
 
+      // Add a small delay between frames for smoother video
+      await new Promise(resolve => setTimeout(resolve, 33)); // ~30fps
       frameIndex++;
       requestAnimationFrame(drawFrame);
     };
@@ -80,7 +88,14 @@ export const uploadSessionRecording = async (data: string): Promise<string> => {
       throw new Error('No recording data available');
     }
 
-    const videoBlob = await createVideoFromFrames(recordingData.history);
+    // Ensure we have unique frames
+    const uniqueFrames = Array.from(new Set(recordingData.history));
+
+    if (uniqueFrames.length < 2) {
+      throw new Error('Not enough frames for video creation');
+    }
+
+    const videoBlob = await createVideoFromFrames(uniqueFrames);
 
     if (videoBlob.size === 0) {
       throw new Error('Generated video is empty');
