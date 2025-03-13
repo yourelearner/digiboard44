@@ -8,6 +8,9 @@ export const uploadSessionRecording = async (videoBlob: Blob): Promise<string> =
     formData.append('file', videoBlob);
     formData.append('upload_preset', UPLOAD_PRESET);
     formData.append('resource_type', 'video');
+    formData.append('folder', 'session_recordings');
+
+    console.log('Uploading to Cloudinary with preset:', UPLOAD_PRESET);
 
     const response = await fetch(CLOUDINARY_UPLOAD_URL, {
       method: 'POST',
@@ -21,6 +24,7 @@ export const uploadSessionRecording = async (videoBlob: Blob): Promise<string> =
     }
 
     const result = await response.json();
+    console.log('Upload successful:', result);
     return result.secure_url;
   } catch (error) {
     console.error('Error uploading to Cloudinary:', error);

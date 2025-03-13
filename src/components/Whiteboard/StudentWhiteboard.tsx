@@ -23,16 +23,16 @@ const StudentWhiteboard: React.FC = () => {
 
   const handleWhiteboardUpdate = useCallback(async (data: WhiteboardUpdate) => {
     console.log('Received whiteboard update:', data);
-    if (canvasRef.current) {
-      try {
-        await canvasRef.current.clearCanvas();
-        if (data.whiteboardData && data.whiteboardData !== '[]') {
-          const paths = JSON.parse(data.whiteboardData);
-          await canvasRef.current.loadPaths(paths);
-        }
-      } catch (error) {
-        console.error('Error updating whiteboard:', error);
+    if (!canvasRef.current) return;
+
+    try {
+      await canvasRef.current.clearCanvas();
+      if (data.whiteboardData && data.whiteboardData !== '[]') {
+        const paths = JSON.parse(data.whiteboardData);
+        await canvasRef.current.loadPaths(paths);
       }
+    } catch (error) {
+      console.error('Error updating whiteboard:', error);
     }
   }, []);
 
@@ -44,12 +44,18 @@ const StudentWhiteboard: React.FC = () => {
       const blob = await recorderRef.current.getBlob();
 
       // Create a new Blob with proper MIME type
-      const videoBlob = new Blob([blob], { type: 'video/webm;codecs=vp9' });
+      const videoBlob = new Blob([blob], { type: 'video/webm' });
 
-      // Upload to Cloudinary
+      console.log('Uploading recording to Cloudinary...');
       const videoUrl = await uploadSessionRecording(videoBlob);
+      console.log('Upload successful, video URL:', videoUrl);
 
-      // Save session
+      // Get current whiteboard data
+      const whiteboardData = canvasRef.current ?
+        JSON.stringify(await canvasRef.current.exportPaths()) :
+        '[]';
+
+      console.log('Saving session to backend...');
       const response = await fetch(`${import.meta.env.VITE_API_URL}/api/sessions`, {
         method: 'POST',
         headers: {
@@ -59,11 +65,13 @@ const StudentWhiteboard: React.FC = () => {
         body: JSON.stringify({
           teacherId: currentTeacherId,
           videoUrl,
-          whiteboardData: '[]'
+          whiteboardData
         })
       });
 
       if (!response.ok) {
+        const errorData = await response.json();
+        console.error('Backend error:', errorData);
         throw new Error('Failed to save session');
       }
 
@@ -97,16 +105,14 @@ const StudentWhiteboard: React.FC = () => {
         video: {
           displaySurface: 'browser',
           width: { ideal: container.clientWidth },
-          height: { ideal: container.clientHeight },
-          frameRate: { ideal: 30 }
+          height: { ideal: container.clientHeight }
         }
       });
 
       recorderRef.current = new RecordRTCPromisesHandler(stream, {
         type: 'video',
-        mimeType: 'video/webm;codecs=vp9',
-        bitsPerSecond: 3000000, // 3 Mbps for better quality
-        frameInterval: 30
+        mimeType: 'video/webm',
+        disableLogs: false
       });
 
       await recorderRef.current.startRecording();
@@ -159,6 +165,9 @@ const StudentWhiteboard: React.FC = () => {
 
     socket.on('connect', () => {
       console.log('Connected to server');
+      socket.on('whiteboardUpdate', handleWhiteboardUpdate);
+      socket.on('teacherOnline', handleTeacherOnline);
+      socket.on('teacherOffline', handleTeacherOffline);
     });
 
     socket.on('disconnect', () => {
@@ -169,10 +178,6 @@ const StudentWhiteboard: React.FC = () => {
         handleStopRecording();
       }
     });
-
-    socket.on('whiteboardUpdate', handleWhiteboardUpdate);
-    socket.on('teacherOnline', handleTeacherOnline);
-    socket.on('teacherOffline', handleTeacherOffline);
 
     return () => {
       socket.off('whiteboardUpdate', handleWhiteboardUpdate);
@@ -185,7 +190,7 @@ const StudentWhiteboard: React.FC = () => {
         socket.emit('leaveTeacherRoom', currentTeacherId);
       }
     };
-  }, [isRecording, currentTeacherId, handleStopRecording, handleWhiteboardUpdate]);
+  }, [handleStopRecording, handleWhiteboardUpdate, isRecording]);
 
   if (!isTeacherLive) {
     return (
