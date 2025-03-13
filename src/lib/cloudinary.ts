@@ -5,7 +5,8 @@ const UPLOAD_PRESET = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET;
 
 export const uploadSessionRecording = async (data: string): Promise<string> => {
   const formData = new FormData();
-  formData.append('file', new Blob([data], { type: 'application/json' }));
+  const blob = new Blob([data], { type: 'application/json' });
+  formData.append('file', blob, 'recording.json');
   formData.append('upload_preset', UPLOAD_PRESET);
   formData.append('api_key', CLOUDINARY_API_KEY);
 
@@ -16,7 +17,9 @@ export const uploadSessionRecording = async (data: string): Promise<string> => {
     });
     
     if (!response.ok) {
-      throw new Error('Failed to upload to Cloudinary');
+      const errorData = await response.json();
+      console.error('Cloudinary error:', errorData);
+      throw new Error(`Failed to upload to Cloudinary: ${errorData.error?.message || 'Unknown error'}`);
     }
 
     const result = await response.json();

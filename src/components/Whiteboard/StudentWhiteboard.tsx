@@ -4,7 +4,6 @@ import { Video, Square } from 'lucide-react';
 import { io, Socket } from 'socket.io-client';
 import { uploadSessionRecording } from '../../lib/cloudinary';
 import { WhiteboardUpdate, TeacherStatus } from '../../types/socket';
-import { SketchCanvas, RecordingData } from '../../types/whiteboard';
 
 const socket: Socket = io(import.meta.env.VITE_API_URL, {
   transports: ['websocket'],
@@ -14,7 +13,7 @@ const socket: Socket = io(import.meta.env.VITE_API_URL, {
 });
 
 const StudentWhiteboard: React.FC = () => {
-  const canvasRef = useRef<SketchCanvas>(null);
+  const canvasRef = useRef<any>(null);
   const [isRecording, setIsRecording] = useState(false);
   const [recordingStartTime, setRecordingStartTime] = useState<Date | null>(null);
   const [whiteboardHistory, setWhiteboardHistory] = useState<string[]>([]);
@@ -24,17 +23,14 @@ const StudentWhiteboard: React.FC = () => {
   useEffect(() => {
     const handleWhiteboardUpdate = async (data: WhiteboardUpdate) => {
       console.log('Received whiteboard update:', data);
-      if (canvasRef.current && data.whiteboardData) {
-        try {
+      if (canvasRef.current) {
+        await canvasRef.current.clearCanvas();
+        if (data.whiteboardData && data.whiteboardData !== '[]') {
           const paths = JSON.parse(data.whiteboardData);
-          await canvasRef.current.clearCanvas();
           await canvasRef.current.loadPaths(paths);
-          
-          if (isRecording) {
-            setWhiteboardHistory(prev => [...prev, data.whiteboardData]);
-          }
-        } catch (error) {
-          console.error('Error parsing whiteboard data:', error);
+        }
+        if (isRecording) {
+          setWhiteboardHistory(prev => [...prev, data.whiteboardData]);
         }
       }
     };
@@ -53,6 +49,9 @@ const StudentWhiteboard: React.FC = () => {
       if (canvasRef.current) {
         canvasRef.current.clearCanvas();
       }
+      if (isRecording) {
+        handleStopRecording();
+      }
     };
 
     socket.on('connect', () => {
@@ -63,6 +62,9 @@ const StudentWhiteboard: React.FC = () => {
       console.log('Student disconnected from server');
       setIsTeacherLive(false);
       setCurrentTeacherId(null);
+      if (isRecording) {
+        handleStopRecording();
+      }
     });
 
     socket.on('whiteboardUpdate', handleWhiteboardUpdate);
@@ -98,7 +100,7 @@ const StudentWhiteboard: React.FC = () => {
     setIsRecording(false);
 
     try {
-      const recordingData: RecordingData = {
+      const recordingData = {
         history: whiteboardHistory,
         startTime: recordingStartTime,
         endTime: new Date()
@@ -106,7 +108,7 @@ const StudentWhiteboard: React.FC = () => {
 
       const videoUrl = await uploadSessionRecording(JSON.stringify(recordingData));
 
-      await fetch(`${import.meta.env.VITE_API_URL}/api/sessions`, {
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/sessions`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -119,10 +121,14 @@ const StudentWhiteboard: React.FC = () => {
         })
       });
 
+      if (!response.ok) {
+        throw new Error('Failed to save session');
+      }
+
       alert('Recording saved successfully!');
     } catch (error) {
       console.error('Error saving recording:', error);
-      alert('Failed to save recording');
+      alert('Failed to save recording. Please try again.');
     }
   };
 
