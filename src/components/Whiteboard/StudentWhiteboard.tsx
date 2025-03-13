@@ -23,7 +23,6 @@ const StudentWhiteboard: React.FC = () => {
   const [canvasSize, setCanvasSize] = useState({ width: 800, height: 600 });
   const [isRecording, setIsRecording] = useState(false);
   const lastUpdateRef = useRef<string>('[]');
-  const recordingAttemptRef = useRef<boolean>(false);
 
   const handleWhiteboardUpdate = useCallback(async (data: WhiteboardUpdate) => {
     if (!canvasRef.current) return;
@@ -49,7 +48,6 @@ const StudentWhiteboard: React.FC = () => {
       recorderRef.current = null;
     }
     setIsRecording(false);
-    recordingAttemptRef.current = false;
   }, []);
 
   const handleStopRecording = useCallback(async () => {
@@ -99,42 +97,31 @@ const StudentWhiteboard: React.FC = () => {
       return;
     }
 
-    if (recordingAttemptRef.current) {
-      return; // Prevent multiple simultaneous recording attempts
-    }
-
-    recordingAttemptRef.current = true;
-
     try {
-      const container = document.getElementById('student-whiteboard-container');
-      if (!container) {
-        throw new Error('Whiteboard container not found');
-      }
-
       const stream = await navigator.mediaDevices.getDisplayMedia({
-        video: {
-          displaySurface: 'browser',
-          width: { ideal: container.clientWidth },
-          height: { ideal: container.clientHeight }
-        }
+        video: true,
+        audio: false
       });
 
       streamRef.current = stream;
       recorderRef.current = new RecordRTCPromisesHandler(stream, {
         type: 'video',
-        mimeType: 'video/webm',
-        disableLogs: true,
-        timeSlice: 1000,
-        bitsPerSecond: 128000
+        mimeType: 'video/webm;codecs=vp8,opus',
+        bitsPerSecond: 128000,
+        frameInterval: 90,
+        video: {
+          width: 1920,
+          height: 1080
+        }
       });
 
       await recorderRef.current.startRecording();
       setIsRecording(true);
 
       // Handle when user stops sharing screen
-      stream.getVideoTracks()[0].onended = () => {
+      stream.getVideoTracks()[0].onended = async () => {
         if (isRecording) {
-          handleStopRecording();
+          await handleStopRecording();
         }
       };
     } catch (error) {
