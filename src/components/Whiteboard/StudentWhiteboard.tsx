@@ -22,6 +22,7 @@ const StudentWhiteboard: React.FC = () => {
   const [currentTeacherId, setCurrentTeacherId] = useState<string | null>(null);
   const [canvasSize, setCanvasSize] = useState({ width: 800, height: 600 });
   const [isRecording, setIsRecording] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const lastUpdateRef = useRef<string>('[]');
 
   const handleWhiteboardUpdate = useCallback(async (data: WhiteboardUpdate) => {
@@ -48,12 +49,14 @@ const StudentWhiteboard: React.FC = () => {
       recorderRef.current = null;
     }
     setIsRecording(false);
+    setIsSaving(false);
   }, []);
 
   const handleStopRecording = useCallback(async () => {
-    if (!recorderRef.current || !currentTeacherId) return;
+    if (!recorderRef.current || !currentTeacherId || isSaving) return;
 
     try {
+      setIsSaving(true);
       await recorderRef.current.stopRecording();
       const blob = await recorderRef.current.getBlob();
 
@@ -89,7 +92,7 @@ const StudentWhiteboard: React.FC = () => {
       cleanupRecording();
       alert('Failed to save recording. Please try again.');
     }
-  }, [currentTeacherId, cleanupRecording]);
+  }, [currentTeacherId, cleanupRecording, isSaving]);
 
   const handleStartRecording = async () => {
     if (!isTeacherLive) {
@@ -97,18 +100,27 @@ const StudentWhiteboard: React.FC = () => {
       return;
     }
 
+    if (isRecording || isSaving) {
+      return;
+    }
+
     try {
       const stream = await navigator.mediaDevices.getDisplayMedia({
-        video: true,
+        video: {
+          displaySurface: 'browser',
+        },
         audio: false
       });
 
+      // Set up recorder with the stream
       streamRef.current = stream;
       recorderRef.current = new RecordRTCPromisesHandler(stream, {
         type: 'video',
         mimeType: 'video/webm;codecs=vp8,opus',
         bitsPerSecond: 128000,
         frameInterval: 90,
+        disableLogs: false,
+        timeSlice: 1000,
         video: {
           width: 1920,
           height: 1080
@@ -120,7 +132,7 @@ const StudentWhiteboard: React.FC = () => {
 
       // Handle when user stops sharing screen
       stream.getVideoTracks()[0].onended = async () => {
-        if (isRecording) {
+        if (isRecording && !isSaving) {
           await handleStopRecording();
         }
       };
@@ -159,9 +171,9 @@ const StudentWhiteboard: React.FC = () => {
       socket.emit('joinTeacherRoom', data.teacherId);
     };
 
-    const handleTeacherOffline = () => {
-      if (isRecording) {
-        handleStopRecording();
+    const handleTeacherOffline = async () => {
+      if (isRecording && !isSaving) {
+        await handleStopRecording();
       }
       setIsTeacherLive(false);
       setCurrentTeacherId(null);
@@ -174,9 +186,9 @@ const StudentWhiteboard: React.FC = () => {
       socket.emit('checkTeacherStatus');
     };
 
-    const handleDisconnect = () => {
-      if (isRecording) {
-        handleStopRecording();
+    const handleDisconnect = async () => {
+      if (isRecording && !isSaving) {
+        await handleStopRecording();
       }
     };
 
@@ -205,6 +217,7 @@ const StudentWhiteboard: React.FC = () => {
     handleWhiteboardUpdate,
     handleStopRecording,
     isRecording,
+    isSaving,
     currentTeacherId,
     cleanupRecording
   ]);
@@ -231,16 +244,17 @@ const StudentWhiteboard: React.FC = () => {
         <div>
           <h2 className="text-2xl font-bold">Live Whiteboard Session</h2>
           <p className="text-sm text-gray-600 mt-1">
-            {isRecording ? 'Recording in progress...' : 'Session in progress'}
+            {isSaving ? 'Saving recording...' : isRecording ? 'Recording in progress...' : 'Session in progress'}
           </p>
         </div>
         <button
           onClick={isRecording ? handleStopRecording : handleStartRecording}
+          disabled={isSaving}
           className={`flex items-center gap-2 px-4 py-2 rounded-md ${
             isRecording
               ? 'bg-red-500 hover:bg-red-600'
               : 'bg-green-500 hover:bg-green-600'
-          } text-white transition-colors`}
+          } text-white transition-colors ${isSaving ? 'opacity-50 cursor-not-allowed' : ''}`}
         >
           {isRecording ? (
             <>
