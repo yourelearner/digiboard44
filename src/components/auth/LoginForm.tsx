@@ -32,7 +32,7 @@ const LoginForm = () => {
     <div className="min-h-screen bg-green-400 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-md w-full space-y-8 bg-white p-6 rounded-lg shadow">
         <div>
-          <h1 className="text-3xl font-bold text-center text-green-500">LOGIN</h1>
+          <h1 className="text-3xl font-bold text-center text-green-600">LOGIN</h1>
         </div>
         <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
           {error && <div className="text-red-500 text-center">{error}</div>}
