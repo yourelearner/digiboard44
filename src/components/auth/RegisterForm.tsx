@@ -1,11 +1,26 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import PhoneInput from 'react-phone-input-2';
+import 'react-phone-input-2/lib/style.css';
+
+type UserRole = 'student' | 'teacher';
+
+interface RegisterFormData {
+  firstName: string;
+  lastName: string;
+  email: string;
+  birthDate: string;
+  phoneNumber: string;
+  password: string;
+  confirmPassword: string;
+  role: UserRole;
+}
 
 const RegisterForm = () => {
   const navigate = useNavigate();
   const { register } = useAuth();
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<RegisterFormData>({
     firstName: '',
     lastName: '',
     email: '',
@@ -21,10 +36,47 @@ const RegisterForm = () => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
+  const handlePhoneChange = (value: string) => {
+    setFormData({ ...formData, phoneNumber: value });
+  };
+
+  const validateForm = async () => {
+    const { firstName, lastName, email, birthDate, phoneNumber, password, confirmPassword } = formData;
+    if (!firstName || !lastName || !email || !birthDate || !phoneNumber || !password || !confirmPassword) {
+      setError('All fields are required');
+      return false;
+    }
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      setError('Invalid email format');
+      return false;
+    }
+    const phoneRegex = /^\+\d{1,3}\d{10}$/;
+    if (!phoneRegex.test(phoneNumber)) {
+      setError('Invalid phone number format');
+      return false;
+    }
+    if (password !== confirmPassword) {
+      setError('Passwords do not match');
+      return false;
+    }
+    // Check if phone number is already in use
+    const response = await fetch(`/api/check-phone?phoneNumber=${phoneNumber}`);
+    if (!response.ok) {
+      setError('Failed to validate phone number');
+      return false;
+    }
+    const data = await response.json();
+    if (data.exists) {
+      setError('Phone number is already in use');
+      return false;
+    }
+    return true;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (formData.password !== formData.confirmPassword) {
-      setError('Passwords do not match');
+    if (!(await validateForm())) {
       return;
     }
     try {
@@ -36,10 +88,10 @@ const RegisterForm = () => {
   };
 
   return (
-    <div className="min-h-screen bg-green-400 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full space-y-8 bg-white p-6 rounded-lg shadow">
+    <div className="min-h-screen bg-green-950 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-md w-full space-y-8 bg-slate-100 p-6 rounded-lg shadow">
         <div>
-          <h1 className="text-3xl font-bold text-center text-green-600">SIGN UP</h1>
+          <h1 className="text-3xl font-bold text-center text-green-950">SIGN UP</h1>
         </div>
         <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
           {error && <div className="text-red-500 text-center">{error}</div>}
@@ -96,14 +148,15 @@ const RegisterForm = () => {
             </div>
             <div>
               <label htmlFor="phoneNumber" className="block text-sm font-medium text-gray-700">Phone Number</label>
-              <input
-                id="phoneNumber"
-                name="phoneNumber"
-                type="tel"
-                required
-                className="appearance-none rounded-md relative block w-full px-2 py-1 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-green-500 focus:border-green-500 sm:text-sm"
+              <PhoneInput
+                country={'us'}
                 value={formData.phoneNumber}
-                onChange={handleChange}
+                onChange={handlePhoneChange}
+                inputProps={{
+                  name: 'phoneNumber',
+                  required: true,
+                  className: 'appearance-none rounded-md relative block w-full px-10 py-1 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-green-500 focus:border-green-500 sm:text-sm'
+                }}
               />
             </div>
             <div>
@@ -156,8 +209,9 @@ const RegisterForm = () => {
           </div>
 
           <div className="text-center">
-            <Link to="/login" className="text-sm text-indigo-600 hover:text-indigo-500">
-              Already have an account? Sign in
+            <span className="text-sm text-gray-500">Already have an account? </span>
+            <Link to="/login" className="text-sm text-green-700 hover:text-green-800">
+            Sign in
             </Link>
           </div>
         </form>
