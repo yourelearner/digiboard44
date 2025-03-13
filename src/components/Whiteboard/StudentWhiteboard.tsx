@@ -23,6 +23,7 @@ const StudentWhiteboard: React.FC = () => {
   const [canvasSize, setCanvasSize] = useState({ width: 800, height: 600 });
   const [isRecording, setIsRecording] = useState(false);
   const lastUpdateRef = useRef<string>('[]');
+  const recordingAttemptRef = useRef<boolean>(false);
 
   const handleWhiteboardUpdate = useCallback(async (data: WhiteboardUpdate) => {
     if (!canvasRef.current) return;
@@ -48,6 +49,7 @@ const StudentWhiteboard: React.FC = () => {
       recorderRef.current = null;
     }
     setIsRecording(false);
+    recordingAttemptRef.current = false;
   }, []);
 
   const handleStopRecording = useCallback(async () => {
@@ -97,6 +99,12 @@ const StudentWhiteboard: React.FC = () => {
       return;
     }
 
+    if (recordingAttemptRef.current) {
+      return; // Prevent multiple simultaneous recording attempts
+    }
+
+    recordingAttemptRef.current = true;
+
     try {
       const container = document.getElementById('student-whiteboard-container');
       if (!container) {
@@ -115,7 +123,9 @@ const StudentWhiteboard: React.FC = () => {
       recorderRef.current = new RecordRTCPromisesHandler(stream, {
         type: 'video',
         mimeType: 'video/webm',
-        disableLogs: true
+        disableLogs: true,
+        timeSlice: 1000,
+        bitsPerSecond: 128000
       });
 
       await recorderRef.current.startRecording();
