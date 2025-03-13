@@ -69,7 +69,7 @@ const TeacherWhiteboard: React.FC = () => {
       setIsLive(true);
       setShowModal(false);
       socket.emit('startLive', userId);
-
+      
       // Send initial canvas state
       const paths = await canvasRef.current.exportPaths();
       socket.emit('whiteboardUpdate', {
@@ -138,8 +138,8 @@ const TeacherWhiteboard: React.FC = () => {
             <button
               onClick={isLive ? handleStopLive : handleStartLive}
               className={`flex items-center gap-2 px-4 py-2 rounded-md ${
-                isLive
-                  ? 'bg-red-500 hover:bg-red-600'
+                isLive 
+                  ? 'bg-red-500 hover:bg-red-600' 
                   : 'bg-green-500 hover:bg-green-600'
               } text-white`}
             >
