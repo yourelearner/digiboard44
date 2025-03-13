@@ -62,10 +62,10 @@ const StudentWhiteboard: React.FC = () => {
 
   const handleStopRecording = useCallback(async () => {
     if (!recorderRef.current || !currentTeacherId || isSaving) {
-      console.log('Cannot stop recording:', {
-        hasRecorder: !!recorderRef.current,
-        hasTeacherId: !!currentTeacherId,
-        isSaving
+      console.log('Cannot stop recording:', { 
+        hasRecorder: !!recorderRef.current, 
+        hasTeacherId: !!currentTeacherId, 
+        isSaving 
       });
       return;
     }
@@ -74,17 +74,17 @@ const StudentWhiteboard: React.FC = () => {
       setIsSaving(true);
       console.log('Stopping recording...');
       await recorderRef.current.stopRecording();
-
+      
       console.log('Getting blob...');
       const blob = await recorderRef.current.getBlob();
-
+      
       if (!blob || blob.size === 0) {
         throw new Error('Empty recording blob');
       }
 
       console.log('Creating video blob...');
       const videoBlob = new Blob([blob], { type: 'video/webm' });
-
+      
       console.log('Uploading to Cloudinary...');
       const videoUrl = await uploadSessionRecording(videoBlob);
       const whiteboardData = lastUpdateRef.current;
@@ -231,7 +231,7 @@ const StudentWhiteboard: React.FC = () => {
       socket.off('teacherOffline', handleTeacherOffline);
       socket.off('connect', handleConnect);
       socket.off('disconnect', handleDisconnect);
-
+      
       if (currentTeacherId) {
         socket.emit('leaveTeacherRoom', currentTeacherId);
       }
