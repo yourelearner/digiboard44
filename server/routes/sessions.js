@@ -18,6 +18,7 @@ router.post('/', auth, studentAuth, async (req, res) => {
     await session.save();
     res.status(201).json(session);
   } catch (error) {
+    console.error('Error saving session:', error);
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 });
@@ -30,6 +31,7 @@ router.get('/student', auth, studentAuth, async (req, res) => {
       .sort({ createdAt: -1 });
     res.json(sessions);
   } catch (error) {
+    console.error('Error fetching sessions:', error);
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 });
@@ -49,6 +51,7 @@ router.delete('/:id', auth, studentAuth, async (req, res) => {
     await session.deleteOne();
     res.json({ message: 'Session deleted successfully' });
   } catch (error) {
+    console.error('Error deleting session:', error);
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 });

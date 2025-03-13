@@ -5,8 +5,6 @@ const CLOUDINARY_UPLOAD_PRESET = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET;
 export const uploadSessionRecording = async (videoBlob: Blob): Promise<string> => {
   try {
     console.log('Starting Cloudinary upload...');
-    console.log('Using cloud name:', CLOUDINARY_CLOUD_NAME);
-    console.log('Using upload preset:', CLOUDINARY_UPLOAD_PRESET);
 
     const formData = new FormData();
     formData.append('file', videoBlob);
