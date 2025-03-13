@@ -2,6 +2,7 @@ import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { ReactSketchCanvas } from 'react-sketch-canvas';
 import { Video, Square } from 'lucide-react';
 import { io, Socket } from 'socket.io-client';
+import RecordRTC, { RecordRTCPromisesHandler } from 'recordrtc';
 import { uploadSessionRecording } from '../../lib/cloudinary';
 import { WhiteboardUpdate, TeacherStatus } from '../../types/socket';
 
@@ -14,13 +15,11 @@ const socket: Socket = io(import.meta.env.VITE_API_URL, {
 
 const StudentWhiteboard: React.FC = () => {
   const canvasRef = useRef<any>(null);
+  const recorderRef = useRef<RecordRTCPromisesHandler | null>(null);
   const [isRecording, setIsRecording] = useState(false);
-  const [recordingStartTime, setRecordingStartTime] = useState<Date | null>(null);
-  const [whiteboardHistory, setWhiteboardHistory] = useState<string[]>([]);
   const [isTeacherLive, setIsTeacherLive] = useState(false);
   const [currentTeacherId, setCurrentTeacherId] = useState<string | null>(null);
   const [canvasSize, setCanvasSize] = useState({ width: 800, height: 600 });
-  const lastUpdateRef = useRef<string | null>(null);
 
   useEffect(() => {
     const handleResize = () => {
@@ -43,29 +42,39 @@ const StudentWhiteboard: React.FC = () => {
       return;
     }
 
-    setIsRecording(true);
-    setRecordingStartTime(new Date());
-    setWhiteboardHistory([]);
+    try {
+      const stream = await navigator.mediaDevices.getDisplayMedia({
+        video: {
+          displaySurface: 'browser',
+        }
+      });
 
-    // Capture initial state if available
-    if (lastUpdateRef.current) {
-      setWhiteboardHistory([lastUpdateRef.current]);
+      recorderRef.current = new RecordRTCPromisesHandler(stream, {
+        type: 'video',
+        mimeType: 'video/webm;codecs=vp8',
+        bitsPerSecond: 128000
+      });
+
+      await recorderRef.current.startRecording();
+      setIsRecording(true);
+    } catch (error) {
+      console.error('Error starting recording:', error);
+      alert('Failed to start recording. Please try again.');
     }
   };
 
   const handleStopRecording = useCallback(async () => {
-    if (!isRecording || !recordingStartTime || !currentTeacherId) return;
-
-    setIsRecording(false);
+    if (!isRecording || !recorderRef.current || !currentTeacherId) return;
 
     try {
-      const recordingData = {
-        history: whiteboardHistory,
-        startTime: recordingStartTime,
-        endTime: new Date()
-      };
+      await recorderRef.current.stopRecording();
+      const blob = await recorderRef.current.getBlob();
 
-      const videoUrl = await uploadSessionRecording(JSON.stringify(recordingData));
+      // Stop all tracks
+      const tracks = recorderRef.current.getInternalRecorder().stream.getTracks();
+      tracks.forEach(track => track.stop());
+
+      const videoUrl = await uploadSessionRecording(blob);
 
       const response = await fetch(`${import.meta.env.VITE_API_URL}/api/sessions`, {
         method: 'POST',
@@ -76,7 +85,7 @@ const StudentWhiteboard: React.FC = () => {
         body: JSON.stringify({
           teacherId: currentTeacherId,
           videoUrl,
-          whiteboardData: JSON.stringify(whiteboardHistory)
+          whiteboardData: '[]'
         })
       });
 
@@ -85,12 +94,14 @@ const StudentWhiteboard: React.FC = () => {
       }
 
       alert('Recording saved successfully!');
-      setWhiteboardHistory([]);
     } catch (error) {
-      console.error('Error saving recording:', error);
+      console.error('Error stopping recording:', error);
       alert('Failed to save recording. Please try again.');
+    } finally {
+      setIsRecording(false);
+      recorderRef.current = null;
     }
-  }, [isRecording, recordingStartTime, currentTeacherId, whiteboardHistory]);
+  }, [isRecording, currentTeacherId]);
 
   useEffect(() => {
     const handleWhiteboardUpdate = async (data: WhiteboardUpdate) => {
@@ -99,14 +110,6 @@ const StudentWhiteboard: React.FC = () => {
         if (data.whiteboardData && data.whiteboardData !== '[]') {
           const paths = JSON.parse(data.whiteboardData);
           await canvasRef.current.loadPaths(paths);
-
-          // Store the latest update
-          lastUpdateRef.current = data.whiteboardData;
-
-          // If recording, add to history
-          if (isRecording) {
-            setWhiteboardHistory(prev => [...prev, data.whiteboardData]);
-          }
         }
       }
     };
@@ -126,7 +129,6 @@ const StudentWhiteboard: React.FC = () => {
       if (isRecording) {
         handleStopRecording();
       }
-      lastUpdateRef.current = null;
     };
 
     socket.on('connect', () => {});
@@ -136,7 +138,6 @@ const StudentWhiteboard: React.FC = () => {
       if (isRecording) {
         handleStopRecording();
       }
-      lastUpdateRef.current = null;
     });
 
     socket.on('whiteboardUpdate', handleWhiteboardUpdate);
@@ -154,7 +155,7 @@ const StudentWhiteboard: React.FC = () => {
         socket.emit('leaveTeacherRoom', currentTeacherId);
       }
     };
-  }, [isRecording, currentTeacherId, handleStopRecording]);
+  }, [isRecording, handleStopRecording, currentTeacherId]);
 
   if (!isTeacherLive) {
     return (
@@ -182,7 +183,7 @@ const StudentWhiteboard: React.FC = () => {
             isRecording
               ? 'bg-red-500 hover:bg-red-600'
               : 'bg-green-500 hover:bg-green-600'
-          } text-white w-full sm:w-auto justify-center`}
+          } text-white`}
         >
           {isRecording ? (
             <>
