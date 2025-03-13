@@ -29,7 +29,6 @@ const StudentWhiteboard: React.FC = () => {
 
     try {
       lastUpdateRef.current = data.whiteboardData;
-
       await canvasRef.current.clearCanvas();
       if (data.whiteboardData && data.whiteboardData !== '[]') {
         const paths = JSON.parse(data.whiteboardData);
@@ -55,7 +54,6 @@ const StudentWhiteboard: React.FC = () => {
     if (!recorderRef.current || !currentTeacherId) return;
 
     try {
-      console.log('Stopping recording...');
       await recorderRef.current.stopRecording();
       const blob = await recorderRef.current.getBlob();
 
@@ -94,7 +92,10 @@ const StudentWhiteboard: React.FC = () => {
   }, [currentTeacherId, cleanupRecording]);
 
   const handleStartRecording = async () => {
-    if (isRecording || !isTeacherLive) return;
+    if (!isTeacherLive) {
+      alert('Cannot start recording when teacher is not live');
+      return;
+    }
 
     try {
       const container = document.getElementById('student-whiteboard-container');
@@ -114,15 +115,17 @@ const StudentWhiteboard: React.FC = () => {
       recorderRef.current = new RecordRTCPromisesHandler(stream, {
         type: 'video',
         mimeType: 'video/webm',
-        disableLogs: false,
-        timeSlice: 1000
+        disableLogs: true
       });
 
       await recorderRef.current.startRecording();
       setIsRecording(true);
 
+      // Handle when user stops sharing screen
       stream.getVideoTracks()[0].onended = () => {
-        handleStopRecording();
+        if (isRecording) {
+          handleStopRecording();
+        }
       };
     } catch (error) {
       console.error('Error starting recording:', error);
