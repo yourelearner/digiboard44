@@ -61,12 +61,20 @@ const StudentWhiteboard: React.FC = () => {
   }, []);
 
   const handleStopRecording = useCallback(async () => {
-    if (!recorderRef.current || !currentTeacherId || isSaving) return;
+    if (!recorderRef.current || !currentTeacherId || isSaving) {
+      console.log('Cannot stop recording:', { 
+        hasRecorder: !!recorderRef.current, 
+        hasTeacherId: !!currentTeacherId, 
+        isSaving 
+      });
+      return;
+    }
 
     try {
       setIsSaving(true);
       console.log('Stopping recording...');
       await recorderRef.current.stopRecording();
+      
       console.log('Getting blob...');
       const blob = await recorderRef.current.getBlob();
       
@@ -76,6 +84,7 @@ const StudentWhiteboard: React.FC = () => {
 
       console.log('Creating video blob...');
       const videoBlob = new Blob([blob], { type: 'video/webm' });
+      
       console.log('Uploading to Cloudinary...');
       const videoUrl = await uploadSessionRecording(videoBlob);
       const whiteboardData = lastUpdateRef.current;
@@ -255,7 +264,7 @@ const StudentWhiteboard: React.FC = () => {
 
   return (
     <div className="p-4">
-      <div className="mb-4 flex justify-between items-center">
+      <div className="mb-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h2 className="text-2xl font-bold">Live Whiteboard Session</h2>
           <p className="text-sm text-gray-600 mt-1">
